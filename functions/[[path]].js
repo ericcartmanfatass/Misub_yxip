@@ -158,6 +158,10 @@ export async function onRequest(context) {
             } else if (url.pathname.startsWith('/sub/')) {
                 // MiSub 订阅路由
                 return await handleMisubRequest(context);
+            } else if (url.pathname.startsWith('/ipsub/')) {
+                // 优选IP订阅输出路由（客户端拉取，无需登录）
+                const { handleIpSubFetch } = await import('./services/ipsub-service.js');
+                return await handleIpSubFetch(url, env);
             } else if (url.pathname === '/cron') {
                 // 定时任务路由 (需要认证)
                 // 使用设置中的 cronSecret 进行验证
@@ -230,6 +234,7 @@ export async function onRequest(context) {
                     '/profile',
                     '/explore', // [新增] 公开页面
                     '/offline',  // [修复] PWA 离线页面
+                    '/ipsub-tool', // [新增] 优选IP工具页面
                     customLoginPath // [新增] 自定义登录路径
                 ].some(route => url.pathname === route || url.pathname.startsWith(route + '/'));
 

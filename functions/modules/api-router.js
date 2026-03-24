@@ -341,6 +341,11 @@ export async function handleApiRequest(request, env) {
         case '/parse_subscription':
             return await handleParseSubscription(request, env);
 
+        case '/ipsub/generate': {
+            const { handleIpSubGenerate } = await import('../services/ipsub-service.js');
+            return await handleIpSubGenerate(request, env);
+        }
+
         case '/logs':
             if (request.method === 'GET') {
                 const { LogService } = await import('../services/log-service.js');

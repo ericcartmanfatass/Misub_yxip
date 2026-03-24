@@ -4,6 +4,7 @@ import { createRouter, createWebHistory } from 'vue-router';
 const DashboardView = () => import('../views/DashboardView.vue');
 const SubscriptionGroupsView = () => import('../views/SubscriptionGroupsView.vue');
 const ManualNodesView = () => import('../views/ManualNodesView.vue');
+const IpSubView = () => import('../views/IpSubView.vue');
 const MySubscriptionsView = () => import('../views/MySubscriptionsView.vue');
 const SettingsView = () => import('../views/SettingsView.vue');
 
@@ -37,6 +38,12 @@ const routes = [
         name: 'ManualNodes',
         component: ManualNodesView,
         meta: { title: '手工节点' }
+    },
+    {
+        path: '/ipsub-tool',
+        name: 'IpSub',
+        component: IpSubView,
+        meta: { title: '优选IP工具' }
     },
     {
         path: '/subscriptions',
