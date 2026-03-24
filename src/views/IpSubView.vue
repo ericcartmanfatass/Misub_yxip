@@ -24,7 +24,7 @@ const qrCodeUrl = ref('');
 const qrCodeTitle = ref('');
 
 // 演示数据
-const DEMO_NODES = `vmess://eyJ2IjoiMiIsInBzIjoi5ryU56S6114514+iKgueCuSIsImFkZCI6ImV4YW1wbGUuY29tIiwicG9ydCI6IjQ0MyIsImlkIjoiMTIzNDU2NzgtYWJjZC1lZmdoLWlqa2wtMTIzNDU2Nzg5MCIsImFpZCI6IjAiLCJzY3kiOiJhdXRvIiwibmV0Ijoid3MiLCJ0eXBlIjoiIiwiaG9zdCI6ImV4YW1wbGUuY29tIiwicGF0aCI6Ii92bWVzcyIsInRscyI6InRscyIsInNuaSI6ImV4YW1wbGUuY29tIn0=`;
+const DEMO_NODES = `vmess://ewogICJ2IjogIjIiLAogICJwcyI6ICJkZW1vLXdzLXRscyIsCiAgImFkZCI6ICJlZGdlLmV4YW1wbGUuY29tIiwKICAicG9ydCI6ICI0NDMiLAogICJpZCI6ICIwMDAwMDAwMC0wMDAwLTQwMDAtODAwMC0wMDAwMDAwMDAwMDEiLAogICJzY3kiOiAiYXV0byIsCiAgIm5ldCI6ICJ3cyIsCiAgInRscyI6ICJ0bHMiLAogICJwYXRoIjogIi93cyIsCiAgImhvc3QiOiAiZWRnZS5leGFtcGxlLmNvbSIsCiAgInNuaSI6ICJlZGdlLmV4YW1wbGUuY29tIiwKICAiZnAiOiAiY2hyb21lIiwKICAiYWxwbiI6ICJoMixodHRwLzEuMSIKfQ==`;
 
 const DEMO_IPS = `104.16.1.2#HK-01
 104.17.2.3:2053#HK-02
@@ -195,7 +195,7 @@ const subCards = computed(() => {
                 id="ipsub-preferredIps"
                 v-model="form.preferredIps"
                 rows="5"
-                placeholder="示例：&#10;104.16.1.2#HK-01&#10;104.17.2.3:2053#HK-02&#10;cf.example.com:443#US-Edge"
+                placeholder="示例：&#10;104.16.1.2#HK-01&#10;104.17.2.3:2053#HK-02&#10;cf.114514.com:443#US-Edge"
                 class="w-full px-3 py-2.5 text-sm bg-white dark:bg-gray-800/80 border border-gray-200/80 dark:border-white/10 misub-radius-lg text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-primary-500/30 focus:border-primary-500 dark:focus:border-primary-400 transition-colors resize-y"
               ></textarea>
               <p class="mt-1 text-xs text-gray-400 dark:text-gray-500">
@@ -213,7 +213,7 @@ const subCards = computed(() => {
                   id="ipsub-namePrefix"
                   v-model="form.namePrefix"
                   type="text"
-                  placeholder="例如：Cloudflare"
+                  placeholder="例如：Cloudflare_"
                   class="w-full px-3 py-2.5 text-sm bg-white dark:bg-gray-800/80 border border-gray-200/80 dark:border-white/10 misub-radius-lg text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-primary-500/30 focus:border-primary-500 dark:focus:border-primary-400 transition-colors"
                 />
               </div>
