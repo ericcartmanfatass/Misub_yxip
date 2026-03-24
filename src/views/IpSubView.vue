@@ -25,7 +25,6 @@ const qrCodeTitle = ref('');
 
 // 演示数据
 const DEMO_NODES = `vmess://eyJ2IjoiMiIsInBzIjoi5ryU56S6114514+iKgueCuSIsImFkZCI6ImV4YW1wbGUuY29tIiwicG9ydCI6IjQ0MyIsImlkIjoiMTIzNDU2NzgtYWJjZC1lZmdoLWlqa2wtMTIzNDU2Nzg5MCIsImFpZCI6IjAiLCJzY3kiOiJhdXRvIiwibmV0Ijoid3MiLCJ0eXBlIjoiIiwiaG9zdCI6ImV4YW1wbGUuY29tIiwicGF0aCI6Ii92bWVzcyIsInRscyI6InRscyIsInNuaSI6ImV4YW1wbGUuY29tIn0=`;
-
 const DEMO_IPS = `104.16.1.2#HK-01
 104.17.2.3:2053#HK-02
 cf.114514.com:443#US-Edge
