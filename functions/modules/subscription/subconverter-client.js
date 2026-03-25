@@ -40,7 +40,7 @@ export function buildClientResponseHeaders(backendHeaders, subName, targetFormat
     const responseHeaders = new Headers();
 
     responseHeaders.set('Content-Disposition', `attachment; filename*=utf-8''${encodeURIComponent(subName)}`);
-    
+
     // 根据目标格式设置 Content-Type
     if (targetFormat.includes('clash')) {
         responseHeaders.set('Content-Type', 'text/yaml; charset=utf-8');
@@ -187,7 +187,17 @@ export async function fetchFromSubconverter(candidates, options) {
             (async () => {
                 try {
                     // 构建查询参数
-                    subconverterUrl.searchParams.set('target', targetFormat);
+                    const surgeMatch = typeof targetFormat === 'string'
+                        ? targetFormat.match(/^surge(?:&ver=(\d+))?$/i)
+                        : null;
+                    if (surgeMatch) {
+                        subconverterUrl.searchParams.set('target', 'surge');
+                        if (surgeMatch[1]) {
+                            subconverterUrl.searchParams.set('ver', surgeMatch[1]);
+                        }
+                    } else {
+                        subconverterUrl.searchParams.set('target', targetFormat);
+                    }
                     subconverterUrl.searchParams.set('url', callbackUrl);
                     if (enableScv) subconverterUrl.searchParams.set('scv', 'true');
                     if (enableUdp) subconverterUrl.searchParams.set('udp', 'true');
@@ -233,7 +243,7 @@ export async function fetchFromSubconverter(candidates, options) {
                     if (replacedCount > 0) {
                         console.log(`[MiSub Sanitize] Removed ${replacedCount} unsafe control chars. Base64: ${isBase64}`);
                     }
-                    
+
                     // [修正] 只有目标格式明确要求是 base64 时才返回 base64。
                     // 以前的逻辑是：如果后端返回了 base64，我们就再转回去。
                     // 但对于 Clash 等客户端，即使后端由于某种原因返回了 base64，MiSub 也应该解码成明文发给客户端。
@@ -248,7 +258,7 @@ export async function fetchFromSubconverter(candidates, options) {
                     if (!isResolved) {
                         isResolved = true;
                         if (nextTimer) clearTimeout(nextTimer);
-                        
+
                         // 结束并清理其他竞态请求
                         controllers.forEach(c => {
                             if (c !== controller) c.abort();
@@ -272,7 +282,7 @@ export async function fetchFromSubconverter(candidates, options) {
                 } finally {
                     if (reqTimeoutId) clearTimeout(reqTimeoutId);
                     activeCount--;
-                    
+
                     // 如果自己失败了，但在超时前，立刻尝试下一个
                     if (!isResolved && activeCount === 0 && index < allVariants.length) {
                         if (nextTimer) clearTimeout(nextTimer);

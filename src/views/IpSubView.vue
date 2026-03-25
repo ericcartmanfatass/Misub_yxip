@@ -217,17 +217,23 @@ const subCards = computed(() => {
                   class="w-full px-3 py-2.5 text-sm bg-white dark:bg-gray-800/80 border border-gray-200/80 dark:border-white/10 misub-radius-lg text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-primary-500/30 focus:border-primary-500 dark:focus:border-primary-400 transition-colors"
                 />
               </div>
-              <div class="flex items-center">
-                <label class="flex items-center gap-2.5 cursor-pointer select-none group">
-                  <input
-                    type="checkbox"
-                    v-model="form.keepOriginalHost"
-                    class="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-primary-600 focus:ring-primary-500 dark:bg-gray-700"
-                  />
-                  <span class="text-sm text-gray-700 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-gray-100 transition-colors">
-                    保留原节点 Host / SNI（推荐）
-                  </span>
+              <div class="flex flex-col">
+                <!-- 占位元素：由于左侧有标题，这里加一个不可见的标题以保证复选框和左侧输入框对齐 -->
+                <label class="hidden sm:block text-sm font-medium mb-1.5 opacity-0 pointer-events-none select-none" aria-hidden="true">
+                  &nbsp;
                 </label>
+                <div class="flex-1 flex items-center">
+                  <label class="flex items-center gap-2.5 cursor-pointer select-none group">
+                    <input
+                      type="checkbox"
+                      v-model="form.keepOriginalHost"
+                      class="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-primary-600 focus:ring-primary-500 dark:bg-gray-700"
+                    />
+                    <span class="text-sm text-gray-700 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-gray-100 transition-colors">
+                      保留原节点 Host / SNI（推荐）
+                    </span>
+                  </label>
+                </div>
               </div>
             </div>
           </div>
