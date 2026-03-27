@@ -78,14 +78,14 @@ const handleQRCode = (id, type = 'subscription') => {
     const profile = profiles.value.find(p => p.id === id);
     if (profile) {
       if (!settings.value.profileToken) {
-          showToast("未配置订阅组 Token，无法生成链接", "error");
-          return;
+        showToast("未配置订阅组 Token，无法生成链接", "error");
+        return;
       }
       const token = settings.value.profileToken;
       const baseUrl = window.location.origin;
       // Using similar logic to useProfiles copy link
       const idToUse = profile.customId || profile.id;
-      qrCodeUrl.value = `${baseUrl}/sub/${token}/${idToUse}`; 
+      qrCodeUrl.value = `${baseUrl}/sub/${token}/${idToUse}`;
       qrCodeTitle.value = profile.name || '订阅组二维码';
       showQRCodeModal.value = true;
     }
@@ -104,7 +104,8 @@ const {
   changeManualNodesPage, addNode, updateNode, deleteNode, deleteAllNodes,
   addNodesFromBulk, autoSortNodes, deduplicateNodes,
   reorderManualNodes, activeGroupFilter, setGroupFilter, batchUpdateGroup, batchDeleteNodes, buildDedupPlan, applyDedupPlan,
-  manualNodeGroups, renameGroup, deleteGroup // Added group helpers
+  manualNodeGroups, renameGroup, deleteGroup,
+  pingResults, pingingNodes, pingNodeId, pingAllNodes // Added ping helpers
 } = useManualNodes(markDirty);
 
 const {
@@ -353,18 +354,10 @@ import SavePrompt from '../../ui/SavePrompt.vue';
   </div>
   <div v-else class="w-full max-w-(--breakpoint-xl) mx-auto p-4 sm:p-6 lg:p-8">
     <!-- Header -->
-    <DashboardHeader
-      :formatted-total-remaining-traffic="formattedTotalRemainingTraffic"
-      @open-log="showLogModal = true"
-      @open-bulk-import="showBulkImportModal = true"
-    />
+    <DashboardHeader :formatted-total-remaining-traffic="formattedTotalRemainingTraffic" @open-log="showLogModal = true"
+      @open-bulk-import="showBulkImportModal = true" />
 
-    <SavePrompt 
-      :is-dirty="isDirty" 
-      :save-state="saveState" 
-      @save="handleSave" 
-      @discard="handleDiscard" 
-    />
+    <SavePrompt :is-dirty="isDirty" :save-state="saveState" @save="handleSave" @discard="handleDiscard" />
 
     <!-- Main Grid -->
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8 items-start">
@@ -376,33 +369,33 @@ import SavePrompt from '../../ui/SavePrompt.vue';
           @update-node-count="handleUpdateNodeCount" @refresh-all="batchUpdateAllSubscriptions"
           @edit="(id) => handleEditSubscription(subscriptions.find(s => s.id === id))"
           @toggle-sort="isSortingSubs = !isSortingSubs" @mark-dirty="markDirty" @delete-all="showDeleteSubsModal = true"
-          @preview="handlePreviewSubscription" @reorder="reorderSubscriptions" 
+          @preview="handlePreviewSubscription" @reorder="reorderSubscriptions"
           @qrcode="(id) => handleQRCode(id, 'subscription')" />
 
         <!-- Manual Node Panel -->
         <ManualNodePanel :manual-nodes="manualNodes" :paginated-manual-nodes="paginatedManualNodes"
           :current-page="manualNodesCurrentPage" :total-pages="manualNodesTotalPages" :is-sorting="isSortingNodes"
           :search-term="searchTerm" :view-mode="manualNodeViewMode" :active-group-filter="activeGroupFilter"
-          :groups="manualNodeGroups"
-          @add="handleAddNode" @delete="handleDeleteNodeWithCleanup"
+          :groups="manualNodeGroups" @add="handleAddNode" @delete="handleDeleteNodeWithCleanup"
           @edit="(id) => handleEditNode(manualNodes.find(n => n.id === id))" @change-page="changeManualNodesPage"
           @update:search-term="newVal => searchTerm.value = newVal" @update:view-mode="setViewMode"
           @toggle-sort="isSortingNodes = !isSortingNodes" @mark-dirty="markDirty" @auto-sort="handleAutoSortNodes"
           @deduplicate="handleDeduplicateNodes" @import="showSubscriptionImportModal = true"
           @delete-all="showDeleteNodesModal = true" @reorder="reorderManualNodes" @set-group-filter="setGroupFilter"
-          @batch-update-group="(ids, group) => batchUpdateGroup(ids, group)" 
-          @batch-delete-nodes="handleBatchDeleteRequest" 
-          @rename-group="renameGroup" @delete-group="deleteGroup"
-          @open-batch-group-modal="handleOpenBatchGroupModal" />
+          @batch-update-group="(ids, group) => batchUpdateGroup(ids, group)"
+          @batch-delete-nodes="handleBatchDeleteRequest" @rename-group="renameGroup" @delete-group="deleteGroup"
+          @open-batch-group-modal="handleOpenBatchGroupModal" :ping-results="pingResults" :pinging-nodes="pingingNodes"
+          @ping="pingNodeId" @ping-all="pingAllNodes" />
       </div>
 
       <!-- Right Column -->
       <div class="lg:col-span-1 md:col-span-2 space-y-8">
-        <RightPanel :config="config" :profiles="profiles" @qrcode="(url, title) => { qrCodeUrl = url; qrCodeTitle = title; showQRCodeModal = true; }" />
+        <RightPanel :config="config" :profiles="profiles"
+          @qrcode="(url, title) => { qrCodeUrl = url; qrCodeTitle = title; showQRCodeModal = true; }" />
         <ProfilePanel :profiles="profiles" @add="handleAddProfile" @edit="handleEditProfile"
           @delete="handleDeleteProfile" @deleteAll="showDeleteProfilesModal = true" @toggle="handleProfileToggle"
-          @copyLink="copyProfileLink" @copyClashLink="copyClashLink" @preview="handlePreviewProfile" @reorder="handleProfileReorder" 
-          @qrcode="(id) => handleQRCode(id, 'profile')" />
+          @copyLink="copyProfileLink" @copyClashLink="copyClashLink" @preview="handlePreviewProfile"
+          @reorder="handleProfileReorder" @qrcode="(id) => handleQRCode(id, 'profile')" />
       </div>
     </div>
   </div>
@@ -441,7 +434,7 @@ import SavePrompt from '../../ui/SavePrompt.vue';
     @confirm="handleSaveNode" @input-url="handleNodeUrlInput" />
   <ManualNodeDedupModal v-model:show="showDedupModal" :plan="dedupPlan"
     @confirm="applyDedupPlan(dedupPlan); showDedupModal = false; dedupPlan = null" />
-  
+
   <BatchGroupModal v-model:show="showBatchGroupModal" :groups="manualNodeGroups" @confirm="handleBatchGroupConfirm" />
 
   <SubscriptionEditModal v-model:show="showSubModal" :is-new="isNewSubscription"
@@ -457,11 +450,7 @@ import SavePrompt from '../../ui/SavePrompt.vue';
     :subscription-name="previewSubscriptionName" :subscription-url="previewSubscriptionUrl"
     :profile-id="previewProfileId" :profile-name="previewProfileName" @update:show="showNodePreviewModal = $event" />
 
-  <QRCodeModal 
-    v-model:show="showQRCodeModal" 
-    :url="qrCodeUrl" 
-    :title="qrCodeTitle" 
-  />
+  <QRCodeModal v-model:show="showQRCodeModal" :url="qrCodeUrl" :title="qrCodeTitle" />
 </template>
 
 <style scoped>
