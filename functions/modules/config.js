@@ -29,6 +29,10 @@ export const DEFAULT_SETTINGS = {
     enableTrafficNode: false,
     enablePublicPage: true,
     storageType: 'kv',
+    ipsub: {
+        expireEnabled: true,
+        expireDays: 7
+    },
     defaultPrefixSettings: {
         enableManualNodes: true,
         enableSubscriptions: true,

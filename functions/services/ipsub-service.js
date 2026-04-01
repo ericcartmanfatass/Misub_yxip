@@ -1,11 +1,13 @@
 /**
  * 优选IP订阅服务（从 cloudflaresub/src/core.js 移植）
  * 
- * 功能：解析节点链接 + 优选IP → 扩展节点 → 存储到 D1 → 输出多格式订阅
- * 存储：使用 MiSub 的 D1 数据库（env.MISUB_DB），表 ipsub_records
+ * 功能：解析节点链接 + 优选IP → 扩展节点 → 按全局存储设置保存 → 输出多格式订阅
+ * 存储：跟随 MiSub 全局 storageType，支持 KV / D1
  */
 
 import { createJsonResponse, createErrorResponse } from '../modules/utils.js';
+import { DEFAULT_SETTINGS, KV_KEY_SETTINGS } from '../modules/config.js';
+import { STORAGE_TYPES, StorageFactory } from '../storage-adapter.js';
 
 // ================================================================
 // Part A: 核心逻辑函数（从 cloudflaresub/src/core.js 搬运的纯函数）
@@ -14,6 +16,13 @@ import { createJsonResponse, createErrorResponse } from '../modules/utils.js';
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
 const DEFAULT_TEST_URL = 'http://cp.cloudflare.com/generate_204';
+const IPSUB_RECORD_VERSION = 2;
+const IPSUB_RECORD_PREFIX = 'ipsub_record:';
+const IPSUB_DEDUP_PREFIX = 'ipsub_dedup:';
+const IPSUB_DEFAULT_SETTINGS = DEFAULT_SETTINGS.ipsub || {
+    expireEnabled: true,
+    expireDays: 7,
+};
 
 // ---- 文本工具 ----
 
@@ -613,8 +622,187 @@ function detectTarget(userAgent = '', explicitTarget = '') {
 
 
 // ================================================================
-// Part B: D1 存储 + API 处理函数
+// Part B: 优选 IP 存储抽象（KV / D1）+ API 处理函数
 // ================================================================
+
+function normalizeIpSubSettings(settings = {}) {
+    const config = settings?.ipsub && typeof settings.ipsub === 'object'
+        ? settings.ipsub
+        : {};
+
+    const expireEnabled = config.expireEnabled !== false;
+    const parsedExpireDays = Number.parseInt(String(config.expireDays ?? IPSUB_DEFAULT_SETTINGS.expireDays), 10);
+    const expireDays = Number.isInteger(parsedExpireDays) && parsedExpireDays > 0
+        ? parsedExpireDays
+        : IPSUB_DEFAULT_SETTINGS.expireDays;
+
+    return {
+        expireEnabled,
+        expireDays,
+    };
+}
+
+function buildExpiryPolicy(settings = {}) {
+    const normalized = normalizeIpSubSettings(settings);
+    const ttlSeconds = normalized.expireEnabled ? normalized.expireDays * 24 * 60 * 60 : null;
+    const expiresAt = ttlSeconds ? new Date(Date.now() + ttlSeconds * 1000).toISOString() : null;
+
+    return {
+        ...normalized,
+        ttlSeconds,
+        expiresAt,
+        d1Offset: normalized.expireEnabled ? `+${normalized.expireDays} days` : null,
+    };
+}
+
+function sqliteDateTimeToIsoUtc(input) {
+    const text = String(input || '').trim();
+    if (!text) return null;
+
+    const match = text.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})$/);
+    if (match) {
+        const [, year, month, day, hours, minutes, seconds] = match;
+        return new Date(Date.UTC(
+            Number(year),
+            Number(month) - 1,
+            Number(day),
+            Number(hours),
+            Number(minutes),
+            Number(seconds),
+        )).toISOString();
+    }
+
+    const date = new Date(text);
+    if (Number.isNaN(date.getTime())) return null;
+    return date.toISOString();
+}
+
+function normalizeStoredRecord(rawValue, fallbackMeta = {}) {
+    if (!rawValue) return null;
+
+    let parsed = rawValue;
+    if (typeof rawValue === 'string') {
+        try {
+            parsed = JSON.parse(rawValue);
+        } catch {
+            return null;
+        }
+    }
+
+    if (!parsed || typeof parsed !== 'object' || !Array.isArray(parsed.nodes)) {
+        return null;
+    }
+
+    const meta = {
+        ...fallbackMeta,
+        ...(parsed.meta && typeof parsed.meta === 'object' ? parsed.meta : {}),
+    };
+
+    return {
+        version: parsed.version || 1,
+        nodes: parsed.nodes,
+        options: parsed.options || {},
+        meta,
+    };
+}
+
+function buildStoredRecord({ nodes, options, dedupHash, expiryPolicy, storageType, previousRecord = null }) {
+    const createdAt = previousRecord?.meta?.createdAt || new Date().toISOString();
+
+    return {
+        version: IPSUB_RECORD_VERSION,
+        nodes,
+        options,
+        meta: {
+            dedupHash,
+            createdAt,
+            updatedAt: new Date().toISOString(),
+            expiresAt: expiryPolicy.expiresAt,
+            expireEnabled: expiryPolicy.expireEnabled,
+            expireDays: expiryPolicy.expireDays,
+            storageType,
+        },
+    };
+}
+
+function isRecordExpired(record) {
+    const expiresAt = record?.meta?.expiresAt;
+    if (!expiresAt) return false;
+    const expiresAtMs = Date.parse(expiresAt);
+    if (Number.isNaN(expiresAtMs)) return false;
+    return expiresAtMs <= Date.now();
+}
+
+function getIpSubRecordKey(id) {
+    return `${IPSUB_RECORD_PREFIX}${id}`;
+}
+
+function getIpSubDedupKey(dedupHash) {
+    return `${IPSUB_DEDUP_PREFIX}${dedupHash}`;
+}
+
+function kvGetOptions(ttlSeconds) {
+    return ttlSeconds ? { expirationTtl: ttlSeconds } : undefined;
+}
+
+async function kvPutJson(kv, key, value, ttlSeconds = null) {
+    const payload = typeof value === 'string' ? value : JSON.stringify(value);
+    const options = kvGetOptions(ttlSeconds);
+    if (options) {
+        await kv.put(key, payload, options);
+        return;
+    }
+    await kv.put(key, payload);
+}
+
+async function kvGetJson(kv, key) {
+    const raw = await kv.get(key);
+    if (!raw) return null;
+    try {
+        return JSON.parse(raw);
+    } catch {
+        return null;
+    }
+}
+
+async function resolveIpSubStorageType(env) {
+    const configuredType = await StorageFactory.getStorageType(env);
+    const hasKv = !!StorageFactory.resolveKV(env);
+    const hasD1 = !!env.MISUB_DB;
+
+    if (configuredType === STORAGE_TYPES.D1) {
+        if (hasD1) return STORAGE_TYPES.D1;
+        if (hasKv) return STORAGE_TYPES.KV;
+    } else {
+        if (hasKv) return STORAGE_TYPES.KV;
+        if (hasD1) return STORAGE_TYPES.D1;
+    }
+
+    return null;
+}
+
+function getReadableStorageTypes(env, primaryType) {
+    const types = [];
+    const hasKv = !!StorageFactory.resolveKV(env);
+    const hasD1 = !!env.MISUB_DB;
+
+    if (primaryType === STORAGE_TYPES.KV && hasKv) types.push(STORAGE_TYPES.KV);
+    if (primaryType === STORAGE_TYPES.D1 && hasD1) types.push(STORAGE_TYPES.D1);
+
+    if (hasKv && !types.includes(STORAGE_TYPES.KV)) types.push(STORAGE_TYPES.KV);
+    if (hasD1 && !types.includes(STORAGE_TYPES.D1)) types.push(STORAGE_TYPES.D1);
+
+    return types;
+}
+
+async function getIpSubSettings(env, storageType) {
+    const storageAdapter = StorageFactory.createAdapter(env, storageType);
+    const settings = await storageAdapter.get(KV_KEY_SETTINGS) || {};
+    return {
+        ...DEFAULT_SETTINGS,
+        ...settings,
+    };
+}
 
 /**
  * 生成 10 位随机短ID
@@ -626,14 +814,12 @@ function createShortId(length = 10) {
 }
 
 /**
- * 生成唯一短ID（检查D1中是否冲突）
+ * 生成唯一短ID（检查当前可读存储中是否冲突）
  */
-async function createUniqueShortId(db, maxTries = 8) {
+async function createUniqueShortId(isExisting, maxTries = 8) {
     for (let i = 0; i < maxTries; i++) {
         const id = createShortId(10);
-        const existing = await db.prepare(
-            'SELECT id FROM ipsub_records WHERE id = ?'
-        ).bind(id).first();
+        const existing = await isExisting(id);
         if (!existing) return id;
     }
     throw new Error('无法生成唯一短链接，请稍后再试');
@@ -678,12 +864,201 @@ async function ensureTable(db) {
             )`
         ).run();
         // 索引可能已存在，忽略错误
-        try { await db.prepare('CREATE INDEX IF NOT EXISTS idx_ipsub_dedup_hash ON ipsub_records(dedup_hash)').run(); } catch {}
-        try { await db.prepare('CREATE INDEX IF NOT EXISTS idx_ipsub_expires_at ON ipsub_records(expires_at)').run(); } catch {}
+        try { await db.prepare('CREATE INDEX IF NOT EXISTS idx_ipsub_dedup_hash ON ipsub_records(dedup_hash)').run(); } catch { }
+        try { await db.prepare('CREATE INDEX IF NOT EXISTS idx_ipsub_expires_at ON ipsub_records(expires_at)').run(); } catch { }
     } catch (error) {
         // 表可能已存在，忽略
         console.debug('[IpSub] ensureTable:', error.message);
     }
+}
+
+async function d1HasId(db, id) {
+    const existing = await db.prepare(
+        'SELECT id FROM ipsub_records WHERE id = ?'
+    ).bind(id).first();
+    return !!existing;
+}
+
+async function findD1RecordByDedupHash(db, dedupHash) {
+    await ensureTable(db);
+    const row = await db.prepare(
+        'SELECT id, data, expires_at FROM ipsub_records WHERE dedup_hash = ? AND (expires_at IS NULL OR expires_at > datetime("now")) LIMIT 1'
+    ).bind(dedupHash).first();
+
+    if (!row) return null;
+
+    const record = normalizeStoredRecord(row.data, {
+        dedupHash,
+        expiresAt: sqliteDateTimeToIsoUtc(row.expires_at),
+    });
+
+    if (!record) return null;
+    return { id: row.id, record };
+}
+
+async function findD1RecordById(db, id) {
+    await ensureTable(db);
+    const row = await db.prepare(
+        'SELECT data, dedup_hash, expires_at FROM ipsub_records WHERE id = ? AND (expires_at IS NULL OR expires_at > datetime("now"))'
+    ).bind(id).first();
+
+    if (!row) return null;
+
+    const record = normalizeStoredRecord(row.data, {
+        dedupHash: row.dedup_hash || null,
+        expiresAt: sqliteDateTimeToIsoUtc(row.expires_at),
+    });
+
+    if (!record) return null;
+    return { id, record };
+}
+
+async function saveD1Record(db, { id, dedupHash, storedRecord, expiryPolicy, existing }) {
+    await ensureTable(db);
+    const payload = JSON.stringify(storedRecord);
+
+    if (existing) {
+        if (expiryPolicy.expireEnabled) {
+            await db.prepare(
+                'UPDATE ipsub_records SET dedup_hash = ?, data = ?, expires_at = datetime("now", ?) WHERE id = ?'
+            ).bind(dedupHash, payload, expiryPolicy.d1Offset, id).run();
+            return;
+        }
+
+        await db.prepare(
+            'UPDATE ipsub_records SET dedup_hash = ?, data = ?, expires_at = NULL WHERE id = ?'
+        ).bind(dedupHash, payload, id).run();
+        return;
+    }
+
+    if (expiryPolicy.expireEnabled) {
+        await db.prepare(
+            'INSERT INTO ipsub_records (id, dedup_hash, data, expires_at) VALUES (?, ?, ?, datetime("now", ?))'
+        ).bind(id, dedupHash, payload, expiryPolicy.d1Offset).run();
+        return;
+    }
+
+    await db.prepare(
+        'INSERT INTO ipsub_records (id, dedup_hash, data, expires_at) VALUES (?, ?, ?, NULL)'
+    ).bind(id, dedupHash, payload).run();
+}
+
+async function cleanupKvExpiredRecord(kv, id, record) {
+    await kv.delete(getIpSubRecordKey(id));
+    if (record?.meta?.dedupHash) {
+        await kv.delete(getIpSubDedupKey(record.meta.dedupHash));
+    }
+}
+
+async function hasKvRecordId(kv, id) {
+    const existing = await kv.get(getIpSubRecordKey(id));
+    return existing !== null;
+}
+
+async function hasRecordIdAnywhere(env, id) {
+    const checks = [];
+
+    if (env.MISUB_DB) {
+        checks.push(d1HasId(env.MISUB_DB, id));
+    }
+
+    const kv = StorageFactory.resolveKV(env);
+    if (kv) {
+        checks.push(hasKvRecordId(kv, id));
+    }
+
+    if (!checks.length) return false;
+
+    const results = await Promise.allSettled(checks);
+    return results.some((result) => result.status === 'fulfilled' && result.value === true);
+}
+
+async function findKvRecordById(kv, id) {
+    const rawRecord = await kvGetJson(kv, getIpSubRecordKey(id));
+    if (!rawRecord) return null;
+
+    const record = normalizeStoredRecord(rawRecord);
+    if (!record) return null;
+
+    if (isRecordExpired(record)) {
+        await cleanupKvExpiredRecord(kv, id, record);
+        return null;
+    }
+
+    return { id, record };
+}
+
+async function findKvRecordByDedupHash(kv, dedupHash) {
+    const dedupEntry = await kvGetJson(kv, getIpSubDedupKey(dedupHash));
+    const id = typeof dedupEntry === 'string' ? dedupEntry : dedupEntry?.id;
+
+    if (!id) return null;
+
+    const record = await findKvRecordById(kv, id);
+    if (!record) {
+        await kv.delete(getIpSubDedupKey(dedupHash));
+        return null;
+    }
+
+    return record;
+}
+
+async function saveKvRecord(kv, { id, dedupHash, storedRecord, expiryPolicy }) {
+    await kvPutJson(kv, getIpSubRecordKey(id), storedRecord, expiryPolicy.ttlSeconds);
+    await kvPutJson(kv, getIpSubDedupKey(dedupHash), {
+        id,
+        expiresAt: storedRecord.meta?.expiresAt || null,
+    }, expiryPolicy.ttlSeconds);
+}
+
+async function findExistingRecordByDedupHash(env, storageType, dedupHash) {
+    if (storageType === STORAGE_TYPES.D1) {
+        if (!env.MISUB_DB) return null;
+        return findD1RecordByDedupHash(env.MISUB_DB, dedupHash);
+    }
+
+    const kv = StorageFactory.resolveKV(env);
+    if (!kv) return null;
+    return findKvRecordByDedupHash(kv, dedupHash);
+}
+
+async function findRecordById(env, storageType, id) {
+    if (storageType === STORAGE_TYPES.D1) {
+        if (!env.MISUB_DB) return null;
+        return findD1RecordById(env.MISUB_DB, id);
+    }
+
+    const kv = StorageFactory.resolveKV(env);
+    if (!kv) return null;
+    return findKvRecordById(kv, id);
+}
+
+async function createStorageShortId(env, storageType) {
+    if (storageType === STORAGE_TYPES.D1 && !env.MISUB_DB) {
+        throw new Error('D1 数据库未配置，无法生成优选 IP 订阅记录');
+    }
+
+    if (storageType === STORAGE_TYPES.KV && !StorageFactory.resolveKV(env)) {
+        throw new Error('KV 未绑定，无法生成优选 IP 订阅记录');
+    }
+
+    return createUniqueShortId((id) => hasRecordIdAnywhere(env, id));
+}
+
+async function saveRecord(env, storageType, payload) {
+    if (storageType === STORAGE_TYPES.D1) {
+        if (!env.MISUB_DB) {
+            throw new Error('D1 数据库未配置');
+        }
+        await saveD1Record(env.MISUB_DB, payload);
+        return;
+    }
+
+    const kv = StorageFactory.resolveKV(env);
+    if (!kv) {
+        throw new Error('KV 未绑定');
+    }
+    await saveKvRecord(kv, payload);
 }
 
 // ================================================================
@@ -692,18 +1067,18 @@ async function ensureTable(db) {
 
 /**
  * 处理 POST /api/ipsub/generate
- * 解析节点 + 优选IP → 扩展 → 存储到 D1 → 返回订阅链接
+ * 解析节点 + 优选IP → 扩展 → 按全局 storageType 存储 → 返回订阅链接
  */
 export async function handleIpSubGenerate(request, env) {
     if (request.method !== 'POST') {
         return createErrorResponse('Method Not Allowed', 405);
     }
 
-    const db = env.MISUB_DB;
-    if (!db) {
+    const storageType = await resolveIpSubStorageType(env);
+    if (!storageType) {
         return createJsonResponse({
             ok: false,
-            error: '未配置 D1 数据库，请先绑定 MISUB_DB'
+            error: '未配置可用存储，请先绑定 MISUB_KV 或 MISUB_DB'
         }, 500);
     }
 
@@ -715,8 +1090,8 @@ export async function handleIpSubGenerate(request, env) {
     }
 
     try {
-        // 确保表存在
-        await ensureTable(db);
+        const settings = await getIpSubSettings(env, storageType);
+        const expiryPolicy = buildExpiryPolicy(settings);
 
         // 1. 解析节点
         const { nodes: baseNodes, warnings: nodeWarnings } = parseNodeLinks(body.nodeLinks || '');
@@ -733,23 +1108,32 @@ export async function handleIpSubGenerate(request, env) {
 
         // 4. 去重检查：相同输入返回同一短链接
         const dedupHash = await buildDedupHash(body);
-        const existing = await db.prepare(
-            'SELECT id FROM ipsub_records WHERE dedup_hash = ? AND expires_at > datetime("now")'
-        ).bind(dedupHash).first();
+        const existing = await findExistingRecordByDedupHash(env, storageType, dedupHash);
 
         let id;
+        let previousRecord = existing?.record || null;
         if (existing) {
             id = existing.id;
-            // 更新数据和过期时间
-            await db.prepare(
-                'UPDATE ipsub_records SET data = ?, expires_at = datetime("now", "+7 days") WHERE id = ?'
-            ).bind(JSON.stringify({ nodes, options }), id).run();
         } else {
-            id = await createUniqueShortId(db);
-            await db.prepare(
-                'INSERT INTO ipsub_records (id, dedup_hash, data, expires_at) VALUES (?, ?, ?, datetime("now", "+7 days"))'
-            ).bind(id, dedupHash, JSON.stringify({ nodes, options })).run();
+            id = await createStorageShortId(env, storageType);
         }
+
+        const storedRecord = buildStoredRecord({
+            nodes,
+            options,
+            dedupHash,
+            expiryPolicy,
+            storageType,
+            previousRecord,
+        });
+
+        await saveRecord(env, storageType, {
+            id,
+            dedupHash,
+            storedRecord,
+            expiryPolicy,
+            existing: !!existing,
+        });
 
         // 5. 生成订阅链接
         const origin = new URL(request.url).origin;
@@ -771,6 +1155,13 @@ export async function handleIpSubGenerate(request, env) {
                 preferredEndpoints: endpoints.length,
                 outputNodes: nodes.length,
             },
+            storageType,
+            expiresAt: expiryPolicy.expiresAt,
+            expiry: {
+                enabled: expiryPolicy.expireEnabled,
+                days: expiryPolicy.expireDays,
+                expiresAt: expiryPolicy.expiresAt,
+            },
             preview: summarizeNodes(nodes, 20),
             warnings: [
                 ...nodeWarnings,
@@ -791,32 +1182,33 @@ export async function handleIpSubGenerate(request, env) {
  * 注意：此接口不需要登录认证（客户端需要能直接拉取订阅）
  */
 export async function handleIpSubFetch(url, env) {
-    const db = env.MISUB_DB;
-    if (!db) {
-        return new Response('D1 数据库未配置', { status: 500 });
-    }
-
     // 提取 ID：/ipsub/aBcDeFgHiJ
     const id = url.pathname.replace(/^\/ipsub\//, '').split('/')[0];
     if (!id) {
         return new Response('缺少订阅 ID', { status: 400 });
     }
 
-    let record;
-    try {
-        record = await db.prepare(
-            'SELECT data FROM ipsub_records WHERE id = ? AND (expires_at IS NULL OR expires_at > datetime("now"))'
-        ).bind(id).first();
-    } catch (error) {
-        // 表可能不存在
+    const storageType = await resolveIpSubStorageType(env);
+    const readableStorageTypes = getReadableStorageTypes(env, storageType);
+    if (readableStorageTypes.length === 0) {
         return new Response('订阅服务暂不可用', { status: 500 });
+    }
+
+    let record = null;
+    for (const currentType of readableStorageTypes) {
+        try {
+            record = await findRecordById(env, currentType, id);
+            if (record) break;
+        } catch (error) {
+            console.warn(`[IpSub] Failed to read record ${id} from ${currentType}:`, error.message);
+        }
     }
 
     if (!record) {
         return new Response('订阅不存在或已过期', { status: 404 });
     }
 
-    const { nodes } = JSON.parse(record.data);
+    const { nodes } = record.record;
 
     // 从请求头或参数识别目标格式
     const userAgent = '';  // handleIpSubFetch 接收的是 URL 对象，没有 request headers
