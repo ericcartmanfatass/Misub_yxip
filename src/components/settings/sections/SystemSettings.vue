@@ -1,11 +1,15 @@
 <script setup>
-defineProps({
+const props = defineProps({
     settings: {
         type: Object,
         required: true
     },
     exportBackup: Function,
-    importBackup: Function
+    importBackup: Function,
+    schemaSql: {
+        type: String,
+        required: true
+    }
 });
 
 import { useToastStore } from '../../../stores/toast.js';
@@ -53,34 +57,9 @@ const handleUpdatePassword = async () => {
 };
 
 
-const SCHEMA_SQL = `CREATE TABLE IF NOT EXISTS subscriptions (
-    id TEXT PRIMARY KEY,
-    data TEXT NOT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS profiles (
-    id TEXT PRIMARY KEY,
-    data TEXT NOT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS settings (
-    key TEXT PRIMARY KEY,
-    value TEXT NOT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE INDEX IF NOT EXISTS idx_subscriptions_updated_at ON subscriptions(updated_at);
-CREATE INDEX IF NOT EXISTS idx_profiles_updated_at ON profiles(updated_at);
-CREATE INDEX IF NOT EXISTS idx_settings_updated_at ON settings(updated_at);`;
-
 const copySchema = async () => {
     try {
-        await navigator.clipboard.writeText(SCHEMA_SQL);
+        await navigator.clipboard.writeText(props.schemaSql);
         showToast('SQL 脚本已复制到剪贴板', 'success');
     } catch (err) {
         showToast('复制失败，请手动复制文件内容', 'error');
@@ -124,7 +103,7 @@ const emit = defineEmits(['migrate']);
                     </p>
                     <ol class="list-decimal list-inside text-xs text-blue-600 dark:text-blue-400 mb-3 space-y-1">
                         <li>在 Cloudflare 后台创建 D1 数据库，并在 Pages 设置中绑定为 <code>MISUB_DB</code></li>
-                        <li>在 D1 控制台的 "Console" 标签页中粘贴并执行 <code>fix_d1_schema.sql</code> 的内容</li>
+                        <li>在 D1 控制台的 "Console" 标签页中粘贴并执行 <code>schema.sql</code> 的内容</li>
                         <li>确保表结构创建成功后，在此处点击迁移按钮</li>
                     </ol>
                     <div class="flex flex-col sm:flex-row gap-3">

@@ -84,17 +84,25 @@ export async function login(password) {
     }
 }
 
-// [核心修改] saveMisubs 现在接收并发送 profiles
-export async function saveMisubs(misubs, profiles) {
+// [核心修改] saveMisubs 现在接收并发送 profiles / ipSubGroups
+export async function saveMisubs(misubs, profiles, ipSubGroups = []) {
     try {
         // 数据预验证
-        if (!Array.isArray(misubs) || !Array.isArray(profiles)) {
-            return { success: false, error: '数据格式错误：misubs 和 profiles 必须是数组', errorType: 'validation' };
+        if (!Array.isArray(misubs) || !Array.isArray(profiles) || !Array.isArray(ipSubGroups)) {
+            return { success: false, error: '数据格式错误：misubs、profiles 和 ipSubGroups 必须是数组', errorType: 'validation' };
         }
 
-        return await api.post('/api/misubs', { misubs, profiles });
+        return await api.post('/api/misubs', { misubs, profiles, ipSubGroups });
     } catch (error) {
         return handleApiError(error, 'saveMisubs');
+    }
+}
+
+export async function generateIpSubGroup(payload) {
+    try {
+        return await api.post('/api/ipsub/generate', payload);
+    } catch (error) {
+        return handleApiError(error, 'generateIpSubGroup');
     }
 }
 

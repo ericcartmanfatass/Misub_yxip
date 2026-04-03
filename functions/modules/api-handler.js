@@ -9,7 +9,7 @@ import { authMiddleware, handleLogin, handleLogout, createUnauthorizedResponse }
 import { sendTgNotification, checkAndNotify } from './notifications.js';
 import { clearAllNodeCaches } from '../services/node-cache-service.js';
 
-import { KV_KEY_SUBS, KV_KEY_PROFILES, KV_KEY_SETTINGS, DEFAULT_SETTINGS as defaultSettings } from './config.js';
+import { KV_KEY_SUBS, KV_KEY_PROFILES, KV_KEY_IPSUB_GROUPS, KV_KEY_SETTINGS, DEFAULT_SETTINGS as defaultSettings } from './config.js';
 
 function isStorageUnavailableError(error) {
     const message = String(error?.message || error || '').toLowerCase();
@@ -44,9 +44,10 @@ export async function handleDataRequest(env) {
             console.error('[API Error /data] KV binding missing while storageType=kv');
         }
         const storageAdapter = StorageFactory.createAdapter(env, storageType);
-        const [misubs, profiles, settings] = await Promise.all([
+        const [misubs, profiles, ipSubGroups, settings] = await Promise.all([
             storageAdapter.get(KV_KEY_SUBS).then(res => res || []),
             storageAdapter.get(KV_KEY_PROFILES).then(res => res || []),
+            storageAdapter.get(KV_KEY_IPSUB_GROUPS).then(res => res || []),
             storageAdapter.get(KV_KEY_SETTINGS).then(res => res || {})
         ]);
 
@@ -63,7 +64,7 @@ export async function handleDataRequest(env) {
             profileToken: settings.profileToken || 'profiles',
             isDefaultPassword: await isUsingDefaultPassword(env)
         };
-        return createJsonResponse({ misubs, profiles, config });
+        return createJsonResponse({ misubs, profiles, ipSubGroups, config });
     } catch (e) {
         console.error('[API Error /data] Failed to read from storage', {
             error: e?.message,
@@ -105,19 +106,21 @@ export async function handleMisubsSave(request, env) {
             }, 400);
         }
 
-        const { misubs, profiles, diff } = requestData;
+        const { misubs, profiles, ipSubGroups, diff } = requestData;
         const storageAdapter = await getStorageAdapter(env);
 
         let finalMisubs = misubs;
         let finalProfiles = profiles;
+        let finalIpSubGroups = ipSubGroups;
 
         // 步骤1.5: 检查是否为 Diff 模式
         if (diff) {
             console.info('[API] Processing Diff Patch...');
             // 获取当前数据
-            const [currentMisubs, currentProfiles] = await Promise.all([
+            const [currentMisubs, currentProfiles, currentIpSubGroups] = await Promise.all([
                 storageAdapter.get(KV_KEY_SUBS).then(res => res || []),
-                storageAdapter.get(KV_KEY_PROFILES).then(res => res || [])
+                storageAdapter.get(KV_KEY_PROFILES).then(res => res || []),
+                storageAdapter.get(KV_KEY_IPSUB_GROUPS).then(res => res || [])
             ]);
 
             // 应用补丁
@@ -133,7 +136,13 @@ export async function handleMisubsSave(request, env) {
                 finalProfiles = currentProfiles; // 无变动
             }
 
-            if (!Array.isArray(finalMisubs) || !Array.isArray(finalProfiles)) {
+            if (diff.ipSubGroups) {
+                finalIpSubGroups = applyPatch(currentIpSubGroups, diff.ipSubGroups);
+            } else {
+                finalIpSubGroups = currentIpSubGroups;
+            }
+
+            if (!Array.isArray(finalMisubs) || !Array.isArray(finalProfiles) || !Array.isArray(finalIpSubGroups)) {
                 return createJsonResponse({
                     success: false,
                     message: '增量更新结果格式错误，请检查补丁数据'
@@ -153,6 +162,15 @@ export async function handleMisubsSave(request, env) {
                 return createJsonResponse({
                     success: false,
                     message: 'misubs 和 profiles 必须是数组格式'
+                }, 400);
+            }
+
+            if (typeof ipSubGroups === 'undefined') {
+                finalIpSubGroups = await storageAdapter.get(KV_KEY_IPSUB_GROUPS).then(res => res || []);
+            } else if (!Array.isArray(ipSubGroups)) {
+                return createJsonResponse({
+                    success: false,
+                    message: 'ipSubGroups 必须是数组格式'
                 }, 400);
             }
         }
@@ -188,7 +206,8 @@ export async function handleMisubsSave(request, env) {
         try {
             await Promise.all([
                 storageAdapter.put(KV_KEY_SUBS, finalMisubs),
-                storageAdapter.put(KV_KEY_PROFILES, finalProfiles)
+                storageAdapter.put(KV_KEY_PROFILES, finalProfiles),
+                storageAdapter.put(KV_KEY_IPSUB_GROUPS, finalIpSubGroups)
             ]);
         } catch (storageError) {
             console.error('[API Error /misubs] Storage put failed:', storageError);
@@ -213,7 +232,8 @@ export async function handleMisubsSave(request, env) {
             message: diff ? '增量更新已保存' : '订阅源及订阅组已保存',
             data: {
                 misubs: finalMisubs,
-                profiles: finalProfiles
+                profiles: finalProfiles,
+                ipSubGroups: finalIpSubGroups
             }
         });
 

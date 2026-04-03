@@ -327,10 +327,14 @@ function getEffectiveTlsHost(node) {
     return String(node.sni || node.hostHeader || node.originalServer || '').trim();
 }
 
-function buildNodeName(baseName, suffix) {
+function buildNodeName(baseName, prefix) {
     const cleanBase = String(baseName || '').trim() || 'node';
-    const cleanSuffix = String(suffix || '').trim();
-    return cleanSuffix ? `${cleanBase} | ${cleanSuffix}` : cleanBase;
+    const cleanPrefix = String(prefix || '').trim();
+
+    if (!cleanPrefix) return cleanBase;
+    if (cleanBase.startsWith(cleanPrefix)) return cleanBase;
+
+    return `${cleanPrefix} ${cleanBase}`;
 }
 
 function expandNodes(baseNodes, endpoints, options = {}) {
@@ -347,12 +351,10 @@ function expandNodes(baseNodes, endpoints, options = {}) {
 
         endpoints.forEach((endpoint, index) => {
             const port = endpoint.port || baseNode.port;
-            const label = endpoint.label || `${endpoint.host}:${port}`;
-            const suffix = namePrefix ? `${namePrefix}-${index + 1}` : label;
             const clone = deepClone(baseNode);
             clone.server = endpoint.host;
             clone.port = port;
-            clone.name = buildNodeName(baseNode.name, suffix);
+            clone.name = buildNodeName(baseNode.name, namePrefix);
             clone.endpointLabel = endpoint.label || '';
             clone.endpointSource = `${endpoint.host}:${port}`;
 
@@ -655,6 +657,27 @@ function buildExpiryPolicy(settings = {}) {
     };
 }
 
+function mergeExpiryOverrides(settings = {}, requestBody = {}) {
+    const normalized = normalizeIpSubSettings(settings);
+    const nextEnabled = typeof requestBody.expireEnabled === 'boolean'
+        ? requestBody.expireEnabled
+        : normalized.expireEnabled;
+
+    const parsedDays = Number.parseInt(String(requestBody.expireDays ?? normalized.expireDays), 10);
+    const nextDays = Number.isInteger(parsedDays) && parsedDays > 0
+        ? parsedDays
+        : normalized.expireDays;
+
+    return {
+        ...settings,
+        ipsub: {
+            ...normalized,
+            expireEnabled: nextEnabled,
+            expireDays: nextDays,
+        },
+    };
+}
+
 function sqliteDateTimeToIsoUtc(input) {
     const text = String(input || '').trim();
     if (!text) return null;
@@ -845,6 +868,8 @@ async function buildDedupHash(body) {
         preferredIps: normalizeText(body.preferredIps || ''),
         namePrefix: String(body.namePrefix || '').trim(),
         keepOriginalHost: body.keepOriginalHost !== false,
+        expireEnabled: body.expireEnabled !== false,
+        expireDays: Number.parseInt(String(body.expireDays ?? IPSUB_DEFAULT_SETTINGS.expireDays), 10) || IPSUB_DEFAULT_SETTINGS.expireDays,
     };
     return sha256Hex(JSON.stringify(normalized));
 }
@@ -1091,7 +1116,8 @@ export async function handleIpSubGenerate(request, env) {
 
     try {
         const settings = await getIpSubSettings(env, storageType);
-        const expiryPolicy = buildExpiryPolicy(settings);
+        const effectiveSettings = mergeExpiryOverrides(settings, body);
+        const expiryPolicy = buildExpiryPolicy(effectiveSettings);
 
         // 1. 解析节点
         const { nodes: baseNodes, warnings: nodeWarnings } = parseNodeLinks(body.nodeLinks || '');
@@ -1107,7 +1133,11 @@ export async function handleIpSubGenerate(request, env) {
         const { nodes, warnings: expandWarnings } = expandNodes(baseNodes, endpoints, options);
 
         // 4. 去重检查：相同输入返回同一短链接
-        const dedupHash = await buildDedupHash(body);
+        const dedupHash = await buildDedupHash({
+            ...body,
+            expireEnabled: expiryPolicy.expireEnabled,
+            expireDays: expiryPolicy.expireDays,
+        });
         const existing = await findExistingRecordByDedupHash(env, storageType, dedupHash);
 
         let id;

@@ -1,4 +1,3 @@
-
 CREATE TABLE IF NOT EXISTS subscriptions (
     id TEXT PRIMARY KEY,
     data TEXT NOT NULL,

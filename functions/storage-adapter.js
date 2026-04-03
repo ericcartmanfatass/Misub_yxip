@@ -14,6 +14,7 @@ export const STORAGE_TYPES = {
 const DATA_KEYS = {
     SUBSCRIPTIONS: 'misub_subscriptions_v1',
     PROFILES: 'misub_profiles_v1',
+    IPSUB_GROUPS: 'misub_ipsub_groups_v1',
     SETTINGS: 'worker_settings_v1'
 };
 
@@ -156,14 +157,19 @@ class D1StorageAdapter {
             const matchesKnownKey =
                 DATA_KEYS.SUBSCRIPTIONS.startsWith(effectivePrefix) ||
                 DATA_KEYS.PROFILES.startsWith(effectivePrefix) ||
+                DATA_KEYS.IPSUB_GROUPS.startsWith(effectivePrefix) ||
                 DATA_KEYS.SETTINGS.startsWith(effectivePrefix) ||
                 effectivePrefix.startsWith(DATA_KEYS.SUBSCRIPTIONS) ||
                 effectivePrefix.startsWith(DATA_KEYS.PROFILES) ||
+                effectivePrefix.startsWith(DATA_KEYS.IPSUB_GROUPS) ||
                 effectivePrefix.startsWith(DATA_KEYS.SETTINGS);
 
             const shouldQuerySubscriptions = !effectivePrefix || effectivePrefix.startsWith(DATA_KEYS.SUBSCRIPTIONS);
             const shouldQueryProfiles = !effectivePrefix || effectivePrefix.startsWith(DATA_KEYS.PROFILES);
-            const shouldQuerySettings = !effectivePrefix || !matchesKnownKey || effectivePrefix.startsWith(DATA_KEYS.SETTINGS);
+            const shouldQuerySettings = !effectivePrefix
+                || !matchesKnownKey
+                || effectivePrefix.startsWith(DATA_KEYS.SETTINGS)
+                || effectivePrefix.startsWith(DATA_KEYS.IPSUB_GROUPS);
 
             for (const table of tables) {
                 if (table.name === 'subscriptions' && !shouldQuerySubscriptions) continue;
@@ -204,6 +210,8 @@ class D1StorageAdapter {
             return { table: 'subscriptions', queryField: 'id', queryValue: 'main' };
         } else if (key === DATA_KEYS.PROFILES) {
             return { table: 'profiles', queryField: 'id', queryValue: 'main' };
+        } else if (key === DATA_KEYS.IPSUB_GROUPS) {
+            return { table: 'settings', queryField: 'key', queryValue: DATA_KEYS.IPSUB_GROUPS };
         } else if (key === DATA_KEYS.SETTINGS) {
             return { table: 'settings', queryField: 'key', queryValue: 'main' };
         } else {
@@ -221,6 +229,8 @@ class D1StorageAdapter {
             return DATA_KEYS.SUBSCRIPTIONS;
         } else if (table === 'profiles' && keyValue === 'main') {
             return DATA_KEYS.PROFILES;
+        } else if (table === 'settings' && keyValue === DATA_KEYS.IPSUB_GROUPS) {
+            return DATA_KEYS.IPSUB_GROUPS;
         } else if (table === 'settings' && keyValue === 'main') {
             return DATA_KEYS.SETTINGS;
         } else {
@@ -441,6 +451,7 @@ export class DataMigrator {
             const results = {
                 subscriptions: false,
                 profiles: false,
+                ipSubGroups: false,
                 settings: false,
                 errors: []
             };
@@ -478,6 +489,17 @@ export class DataMigrator {
                 }
             } catch (error) {
                 results.errors.push(`设置迁移失败: ${error.message}`);
+            }
+
+            // 迁移优选 IP 订阅组
+            try {
+                const ipSubGroups = await kvAdapter.get(DATA_KEYS.IPSUB_GROUPS);
+                if (ipSubGroups) {
+                    await d1Adapter.put(DATA_KEYS.IPSUB_GROUPS, ipSubGroups);
+                    results.ipSubGroups = true;
+                }
+            } catch (error) {
+                results.errors.push(`优选IP订阅组迁移失败: ${error.message}`);
             }
 
             return results;

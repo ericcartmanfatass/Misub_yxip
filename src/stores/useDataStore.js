@@ -21,6 +21,7 @@ export const useDataStore = defineStore('data', () => {
     // --- State ---
     const subscriptions = ref([]);
     const profiles = ref([]);
+    const ipSubGroups = ref([]);
     const settings = computed(() => settingsStore.config);
 
     // Store Status
@@ -39,7 +40,8 @@ export const useDataStore = defineStore('data', () => {
     // --- Internal: Snapshot for rollback/diffing ---
     let lastSavedData = {
         subscriptions: [],
-        profiles: []
+        profiles: [],
+        ipSubGroups: []
     };
 
     // --- Actions ---
@@ -52,6 +54,7 @@ export const useDataStore = defineStore('data', () => {
             const cleanSubs = (data.misubs || []).map(sub => ({ ...sub, isUpdating: false }));
             subscriptions.value = cleanSubs;
             profiles.value = data.profiles || [];
+            ipSubGroups.value = data.ipSubGroups || [];
             settingsStore.setConfig({ ...DEFAULT_SETTINGS, ...data.config });
 
             updateSnapshot();
@@ -115,7 +118,8 @@ export const useDataStore = defineStore('data', () => {
 
             const payload = {
                 misubs: sanitizedSubs,
-                profiles: profiles.value
+                profiles: profiles.value,
+                ipSubGroups: ipSubGroups.value
             };
 
             const result = await api.post('/api/misubs', payload);
@@ -128,6 +132,7 @@ export const useDataStore = defineStore('data', () => {
             if (result.data) {
                 if (result.data.misubs) subscriptions.value = result.data.misubs;
                 if (result.data.profiles) profiles.value = result.data.profiles;
+                if (result.data.ipSubGroups) ipSubGroups.value = result.data.ipSubGroups;
             }
 
             updateSnapshot();
@@ -145,7 +150,12 @@ export const useDataStore = defineStore('data', () => {
             }, 2000);
 
             // Update cache
-            dataCache.set(payload); // Note: ideally we cache the RESULT from backend, but payload is close enough for simple cache
+            dataCache.set({
+                misubs: subscriptions.value,
+                profiles: profiles.value,
+                ipSubGroups: ipSubGroups.value,
+                config: settingsStore.config
+            });
 
         } catch (error) {
             console.error('[Store] Failed to save data:', error);
@@ -183,7 +193,8 @@ export const useDataStore = defineStore('data', () => {
     function updateSnapshot() {
         lastSavedData = {
             subscriptions: JSON.parse(JSON.stringify(subscriptions.value)),
-            profiles: JSON.parse(JSON.stringify(profiles.value))
+            profiles: JSON.parse(JSON.stringify(profiles.value)),
+            ipSubGroups: JSON.parse(JSON.stringify(ipSubGroups.value))
         };
     }
 
@@ -218,14 +229,36 @@ export const useDataStore = defineStore('data', () => {
         profiles.value.unshift(profile);
     }
 
+    function addIpSubGroup(group) {
+        ipSubGroups.value.unshift(group);
+    }
+
     function overwriteProfiles(items) {
         profiles.value = items;
+    }
+
+    function overwriteIpSubGroups(items) {
+        ipSubGroups.value = items;
     }
 
     function removeProfile(id) {
         const index = profiles.value.findIndex(p => p.id === id || p.customId === id);
         if (index !== -1) {
             profiles.value.splice(index, 1);
+        }
+    }
+
+    function updateIpSubGroup(id, updates) {
+        const index = ipSubGroups.value.findIndex(group => group.id === id);
+        if (index !== -1) {
+            ipSubGroups.value[index] = { ...ipSubGroups.value[index], ...updates };
+        }
+    }
+
+    function removeIpSubGroup(id) {
+        const index = ipSubGroups.value.findIndex(group => group.id === id);
+        if (index !== -1) {
+            ipSubGroups.value.splice(index, 1);
         }
     }
 
@@ -285,6 +318,7 @@ export const useDataStore = defineStore('data', () => {
         // State
         subscriptions,
         profiles,
+        ipSubGroups,
         settings,
         isLoading,
         saveState,
@@ -309,12 +343,15 @@ export const useDataStore = defineStore('data', () => {
         removeSubscription,
         updateSubscription,
         addProfile,
+        addIpSubGroup,
         overwriteProfiles,
+        overwriteIpSubGroups,
         removeProfile,
+        updateIpSubGroup,
+        removeIpSubGroup,
         removeManualNodeFromProfiles,
         removeSubscriptionFromProfiles,
         markDirty,
         clearDirty
     };
 });
-

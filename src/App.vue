@@ -23,7 +23,7 @@ const ScrollToTop = defineAsyncComponent(() => import('./components/ui/ScrollToT
 
 const route = useRoute();
 const themeStore = useThemeStore();
-const { theme } = storeToRefs(themeStore);
+const { resolvedTheme } = storeToRefs(themeStore);
 const { initTheme } = themeStore;
 
 const sessionStore = useSessionStore();
@@ -88,7 +88,7 @@ const handleDiscard = async () => {
 </script>
 
 <template>
-  <div :class="theme"
+  <div :class="resolvedTheme"
     class="min-h-screen flex flex-col text-gray-800 dark:text-gray-200 transition-colors duration-300 bg-gray-100 dark:bg-[#030712]">
     <!-- Navigation -->
     <NavBar v-if="showModernNavBar" :is-logged-in="true" @logout="logout" />

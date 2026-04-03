@@ -12,6 +12,7 @@ import GlobalSettings from '../components/settings/sections/GlobalSettings.vue';
 
 import SystemSettings from '../components/settings/sections/SystemSettings.vue';
 import ClientSettings from '../components/settings/sections/ClientSettings.vue';
+import rawSchemaSql from '../../schema.sql?raw';
 
 // 使用 composable 获取所有设置相关的状态和函数
 const {
@@ -31,6 +32,7 @@ const {
 
 // 仅新布局需要的状态
 const activeTab = ref('basic');
+const schemaSql = rawSchemaSql.trim();
 
 const currentTabLabel = computed(() => {
   switch (activeTab.value) {
@@ -95,7 +97,7 @@ onMounted(() => {
         <ServiceSettings v-show="activeTab === 'service'" :settings="settings" />
         <ClientSettings v-show="activeTab === 'client'" />
         <SystemSettings v-show="activeTab === 'system'" :settings="settings" :exportBackup="exportBackup"
-          :importBackup="importBackup" @migrate="handleOpenMigrationModal" />
+          :importBackup="importBackup" :schemaSql="schemaSql" @migrate="handleOpenMigrationModal" />
       </div>
 
       <template #footer>
@@ -115,6 +117,6 @@ onMounted(() => {
     </SettingsLayout>
 
     <!-- Modals -->
-    <MigrationModal v-model:show="showMigrationModal" @success="handleMigrationSuccess" />
+    <MigrationModal v-model:show="showMigrationModal" :schemaSql="schemaSql" @success="handleMigrationSuccess" />
   </div>
 </template>

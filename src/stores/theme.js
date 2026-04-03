@@ -1,44 +1,124 @@
 
 import { defineStore } from 'pinia';
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 
 export const useThemeStore = defineStore('theme', () => {
-  const theme = ref('light');
+  const theme = ref('system');
+  const systemTheme = ref('light');
+
+  let mediaQueryList = null;
+  let mediaQueryHandler = null;
+
+  const resolvedTheme = computed(() => (
+    theme.value === 'system' ? systemTheme.value : theme.value
+  ));
+
+  function isValidTheme(value) {
+    return ['light', 'dark', 'system'].includes(value);
+  }
+
+  function syncSystemTheme() {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+      systemTheme.value = 'light';
+      return;
+    }
+
+    systemTheme.value = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  }
+
+  function cleanupSystemThemeListener() {
+    if (!mediaQueryList || !mediaQueryHandler) return;
+
+    if (typeof mediaQueryList.removeEventListener === 'function') {
+      mediaQueryList.removeEventListener('change', mediaQueryHandler);
+    } else if (typeof mediaQueryList.removeListener === 'function') {
+      mediaQueryList.removeListener(mediaQueryHandler);
+    }
+
+    mediaQueryList = null;
+    mediaQueryHandler = null;
+  }
+
+  function setupSystemThemeListener() {
+    cleanupSystemThemeListener();
+
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+      return;
+    }
+
+    mediaQueryList = window.matchMedia('(prefers-color-scheme: dark)');
+    mediaQueryHandler = (event) => {
+      systemTheme.value = event.matches ? 'dark' : 'light';
+      if (theme.value === 'system') {
+        updateThemeClass();
+      }
+    };
+
+    if (typeof mediaQueryList.addEventListener === 'function') {
+      mediaQueryList.addEventListener('change', mediaQueryHandler);
+    } else if (typeof mediaQueryList.addListener === 'function') {
+      mediaQueryList.addListener(mediaQueryHandler);
+    }
+  }
 
   function initTheme() {
     const savedTheme = localStorage.getItem('theme');
-    if (savedTheme) {
+    if (isValidTheme(savedTheme)) {
       theme.value = savedTheme;
     } else {
-      // 如果没有保存的主题，检查系统偏好
-      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      theme.value = prefersDark ? 'dark' : 'light';
+      theme.value = 'system';
     }
+
+    syncSystemTheme();
+    setupSystemThemeListener();
     updateThemeClass();
   }
 
   function toggleTheme() {
-    theme.value = theme.value === 'light' ? 'dark' : 'light';
+    if (theme.value === 'light') {
+      setTheme('dark');
+      return;
+    }
+
+    if (theme.value === 'dark') {
+      setTheme('system');
+      return;
+    }
+
+    setTheme('light');
+  }
+
+  function setTheme(nextTheme) {
+    if (!isValidTheme(nextTheme)) return;
+
+    theme.value = nextTheme;
     localStorage.setItem('theme', theme.value);
     updateThemeClass();
   }
 
   function updateThemeClass() {
-    if (theme.value === 'dark') {
+    const activeTheme = resolvedTheme.value;
+
+    if (activeTheme === 'dark') {
       document.documentElement.classList.add('dark');
     } else {
       document.documentElement.classList.remove('dark');
     }
+
+    document.documentElement.dataset.themeMode = theme.value;
+    document.documentElement.dataset.themeResolved = activeTheme;
     
     // 动态更新状态栏主题颜色
     updateStatusBarTheme();
   }
   
   function updateStatusBarTheme() {
+    const activeTheme = resolvedTheme.value;
+
     // 更新主题颜色的 meta 标签
     const themeColorMeta = document.querySelector('meta[name="theme-color"]:not([media])');
     if (themeColorMeta) {
-      if (theme.value === 'dark') {
+      if (activeTheme === 'dark') {
         themeColorMeta.setAttribute('content', '#0f172a'); // 深色模式背景色
       } else {
         themeColorMeta.setAttribute('content', '#f8fafc'); // 浅色模式背景色
@@ -53,5 +133,5 @@ export const useThemeStore = defineStore('theme', () => {
     }
   }
 
-  return { theme, initTheme, toggleTheme };
+  return { theme, resolvedTheme, initTheme, setTheme, toggleTheme, syncSystemTheme };
 });

@@ -43,13 +43,6 @@ const route = useRoute();
 const showPublicFeedback = computed(() => !props.isLoggedIn && (route.name === 'Home' || route.name === 'Explore'));
 const canShowExplore = computed(() => props.showExplore);
 const isExploreActive = computed(() => route.path === '/explore');
-const exploreBtnClass = computed(() => {
-  const classes = buildBtnClass('neutral');
-  if (isExploreActive.value) {
-    classes.push('bg-primary-50', 'text-primary-600', 'dark:bg-primary-900/20', 'dark:text-primary-400', 'ring-1', 'ring-primary-400/40');
-  }
-  return classes;
-});
 
 function handlePublicFeedback() {
   if (typeof window !== 'undefined') {
@@ -77,9 +70,10 @@ function buildBtnClass(type) {
     <router-link
       v-if="canShowExplore"
       to="/explore"
-      :class="exploreBtnClass"
+      :class="buildBtnClass('neutral')"
       title="公开页"
       aria-label="公开页"
+      :aria-current="isExploreActive ? 'page' : undefined"
     >
       <BaseIcon :path="NAV_ICONS.explore" className="h-5 w-5" />
     </router-link>
@@ -94,21 +88,21 @@ function buildBtnClass(type) {
       <BaseIcon :path="NAV_ICONS.feedback" className="h-5 w-5" />
     </button>
 
+    <button
+      v-if="isLoggedIn && showSettings"
+      @click="emit('openSettings')"
+      :class="buildBtnClass('neutral')"
+      title="设置"
+      aria-label="打开设置"
+    >
+      <BaseIcon :path="NAV_ICONS.settings" className="h-5 w-5" />
+    </button>
+
     <ThemeToggle />
 
     <div v-if="showDivider" class="h-4 w-px bg-gray-200 dark:bg-white/10 mx-1"></div>
 
     <template v-if="isLoggedIn">
-      <button
-        v-if="showSettings"
-        @click="emit('openSettings')"
-        :class="buildBtnClass('neutral')"
-        title="设置"
-        aria-label="打开设置"
-      >
-        <BaseIcon :path="NAV_ICONS.settings" className="h-5 w-5" />
-      </button>
-
       <button
         @click="emit('toggleLayout')"
         :class="buildBtnClass('neutral')"
