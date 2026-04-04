@@ -22,26 +22,26 @@ const emit = defineEmits(['preview', 'qrcode', 'edit', 'delete', 'toggle-select'
 
 const shortLink = computed(() => props.group.urls?.auto || '');
 
-const sourceLabel = computed(() => {
-  if (props.group.sourceType === 'manual') {
-    const total = Array.isArray(props.group.manualNodeIds) ? props.group.manualNodeIds.length : props.group.counts?.inputNodes || 0;
-    return `手动节点 · ${total} 个`;
-  }
-  return '手动输入';
-});
+function formatDateOnly(value) {
+  if (!value) return '';
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+
+  return `${year}/${month}/${day}`;
+}
 
 const expireLabel = computed(() => {
   if (props.group.expiry?.enabled === false) return '长期有效';
   if (props.group.expiry?.expiresAt) {
-    return `到期 ${new Date(props.group.expiry.expiresAt).toLocaleDateString()}`;
+    const formatted = formatDateOnly(props.group.expiry.expiresAt);
+    return formatted ? `到期日：${formatted}` : '长期有效';
   }
-  return '沿用默认过期';
-});
-
-const generatedAtLabel = computed(() => {
-  const value = props.group.lastGeneratedAt || props.group.updatedAt || props.group.createdAt;
-  if (!value) return '刚刚生成';
-  return new Date(value).toLocaleString();
+  return '长期有效';
 });
 
 function handleCardClick() {
@@ -73,7 +73,7 @@ async function handleCopyShortLink() {
 
 <template>
   <div
-    class="group relative glass-panel p-5 card-hover flex flex-col h-full min-h-[220px] overflow-hidden transition-all"
+    class="group relative glass-panel p-5 card-hover flex flex-col h-full overflow-hidden transition-all"
     :class="selected ? 'ring-2 ring-primary-500/40' : ''"
     @click="handleCardClick"
   >
@@ -82,11 +82,11 @@ async function handleCopyShortLink() {
     <div class="relative z-10 flex flex-col h-full">
       <div class="flex items-start justify-between gap-3 mb-4">
         <div class="min-w-0 flex-1">
-          <div class="flex items-center gap-2 mb-1.5 flex-wrap">
+          <div class="flex items-center gap-2 mb-2 flex-wrap">
             <span class="text-[10px] font-bold tracking-wider px-2 py-0.5 rounded-full uppercase bg-primary-500/10 text-primary-600 dark:text-primary-300 border border-primary-500/20">
               IPSUB
             </span>
-            <span class="text-[10px] font-medium px-2 py-0.5 rounded-full bg-gray-100 dark:bg-white/5 text-gray-600 dark:text-gray-300 border border-transparent">
+            <span class="text-[10px] font-medium px-2 py-0.5 rounded-full bg-gray-100 dark:bg-white/5 text-gray-600 dark:text-gray-300 border border-transparent whitespace-nowrap">
               {{ expireLabel }}
             </span>
           </div>
@@ -95,9 +95,6 @@ async function handleCopyShortLink() {
             {{ group.name || '未命名优选IP订阅组' }}
           </h3>
 
-          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400 truncate">
-            {{ sourceLabel }}
-          </p>
         </div>
 
         <div v-if="selectionMode" class="shrink-0 pt-1">
@@ -131,17 +128,14 @@ async function handleCopyShortLink() {
         </div>
       </div>
 
-      <button type="button" class="relative mb-4 w-full text-left" title="点击复制短链接" @click.stop="handleCopyShortLink">
+      <button type="button" class="relative mb-4 w-full text-left" title="点击可复制短链接" @click.stop="handleCopyShortLink">
         <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
           <svg class="h-3.5 w-3.5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" /></svg>
         </div>
-        <div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-          <span class="text-[11px] font-medium text-primary-600 dark:text-primary-300">点击复制</span>
-        </div>
-        <input type="text" :value="shortLink" readonly class="w-full cursor-copy text-xs text-gray-500 dark:text-gray-400 bg-gray-50/50 dark:bg-black/20 misub-radius-md pl-9 pr-20 py-2 border border-transparent focus:border-primary-500/30 focus:bg-white dark:focus:bg-black/40 focus:outline-none transition-all font-mono truncate pointer-events-none" />
+        <input type="text" :value="shortLink" readonly class="w-full cursor-copy text-xs text-gray-500 dark:text-gray-400 bg-gray-50/50 dark:bg-black/20 misub-radius-md pl-9 pr-4 py-2 border border-transparent focus:border-primary-500/30 focus:bg-white dark:focus:bg-black/40 focus:outline-none transition-all font-mono truncate pointer-events-none" />
       </button>
 
-      <div class="grid grid-cols-3 gap-2 mt-auto">
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
         <div class="bg-white/60 dark:bg-white/5 misub-radius-md px-3 py-2 text-center">
           <p class="text-[11px] text-gray-500 dark:text-gray-400">原始节点</p>
           <p class="mt-1 text-sm font-semibold text-gray-900 dark:text-white">{{ group.counts?.inputNodes || 0 }}</p>
@@ -156,9 +150,6 @@ async function handleCopyShortLink() {
         </div>
       </div>
 
-      <div class="flex items-center justify-end mt-4 pt-3 border-t border-gray-100 dark:border-white/5 gap-3">
-        <span class="text-[11px] text-gray-400 dark:text-gray-500 whitespace-nowrap">{{ generatedAtLabel }}</span>
-      </div>
     </div>
   </div>
 </template>

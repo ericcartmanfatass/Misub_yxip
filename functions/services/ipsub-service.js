@@ -327,14 +327,24 @@ function getEffectiveTlsHost(node) {
     return String(node.sni || node.hostHeader || node.originalServer || '').trim();
 }
 
-function buildNodeName(baseName, prefix) {
+function buildNodeName(baseName, prefix, suffix = '') {
     const cleanBase = String(baseName || '').trim() || 'node';
     const cleanPrefix = String(prefix || '').trim();
+    const cleanSuffix = String(suffix || '').trim();
 
-    if (!cleanPrefix) return cleanBase;
-    if (cleanBase.startsWith(cleanPrefix)) return cleanBase;
+    const parts = [];
 
-    return `${cleanPrefix} ${cleanBase}`;
+    if (cleanPrefix && cleanBase !== cleanPrefix && !cleanBase.startsWith(`${cleanPrefix} |`)) {
+        parts.push(cleanPrefix);
+    }
+
+    parts.push(cleanBase);
+
+    if (cleanSuffix && cleanSuffix !== cleanBase && !cleanBase.endsWith(`| ${cleanSuffix}`) && cleanSuffix !== cleanPrefix) {
+        parts.push(cleanSuffix);
+    }
+
+    return parts.join(' | ');
 }
 
 function expandNodes(baseNodes, endpoints, options = {}) {
@@ -354,7 +364,7 @@ function expandNodes(baseNodes, endpoints, options = {}) {
             const clone = deepClone(baseNode);
             clone.server = endpoint.host;
             clone.port = port;
-            clone.name = buildNodeName(baseNode.name, namePrefix);
+            clone.name = buildNodeName(baseNode.name, namePrefix, endpoint.label || '');
             clone.endpointLabel = endpoint.label || '';
             clone.endpointSource = `${endpoint.host}:${port}`;
 
