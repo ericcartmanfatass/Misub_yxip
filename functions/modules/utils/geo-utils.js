@@ -348,6 +348,12 @@ export function parseNodeInfo(nodeUrl) {
     const protocolMatch = nodeUrl.match(/^(.*?):\/\//);
     const protocol = protocolMatch ? protocolMatch[1].toLowerCase() : 'unknown';
 
+    const isLikelyBase64Name = (value) => {
+        const text = String(value || '').trim();
+        if (!text || text.length < 16) return false;
+        return /^[A-Za-z0-9+/=_-]+$/.test(text);
+    };
+
     // 提取节点名称
     let nodeName = '';
     const hashIndex = nodeUrl.lastIndexOf('#');
@@ -372,7 +378,8 @@ export function parseNodeInfo(nodeUrl) {
     }
 
     // 如果没有名称，从URL生成一个
-    if (!nodeName) {
+    // 对 vmess 先延后兜底，优先尝试解码 ps，避免直接把 base64 主体当作名称
+    if (!nodeName && protocol !== 'vmess') {
         // 从URL中提取一些信息作为名称
         const urlWithoutProtocol = nodeUrl.replace(/^[^:]*:\/\//, '');
         const urlParts = urlWithoutProtocol.split(/[:@?#]/);
@@ -392,14 +399,11 @@ export function parseNodeInfo(nodeUrl) {
             if (base64Part && !base64Part.includes('@')) { // 排除可能是明文的情况(虽然vmess少见)
                 try {
                     // 处理 URL-safe Base64 字符
-                    let safeBody = base64Part.replace(/-/g, '+').replace(/_/g, '/');
+                    let safeBody = base64Part.replace(/\s+/g, '').replace(/-/g, '+').replace(/_/g, '/');
                     // 补全 Padding
                     while (safeBody.length % 4) {
                         safeBody += '=';
                     }
-                    const jsonStr = atob(safeBody); // 使用 decodeURIComponent(escape(atob(safeBody))) 处理中文? 
-                    // 不, atob 解码后通常是 UTF-8 字节流乱码 if directly used as string for Chinese
-                    // 需要用 TextDecoder
                     const binaryString = atob(safeBody);
                     const bytes = new Uint8Array(binaryString.length);
                     for (let i = 0; i < binaryString.length; i++) {
@@ -417,6 +421,10 @@ export function parseNodeInfo(nodeUrl) {
                 } catch (e) {
                     console.debug('[GeoUtils] VMess base64 decode failed:', e);
                 }
+            }
+
+            if (!nodeName || isLikelyBase64Name(nodeName)) {
+                nodeName = server || '未命名 VMess 节点';
             }
         } else if (protocol === 'ss') {
             // ss://base64(user:pass@host:port)#name
