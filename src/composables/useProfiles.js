@@ -43,7 +43,7 @@ export function useProfiles(markDirty) {
 
   const handleAddProfile = () => {
     isNewProfile.value = true;
-    editingProfile.value = { name: '', enabled: true, subscriptions: [], manualNodes: [], customId: '', subConverter: '', subConfig: '', expiresAt: '' };
+    editingProfile.value = { name: '', enabled: true, subscriptions: [], ipSubGroups: [], manualNodes: [], customId: '', subConverter: '', subConfig: '', expiresAt: '' };
     showProfileModal.value = true;
   };
 
@@ -101,7 +101,7 @@ export function useProfiles(markDirty) {
     const profile = profiles.value.find(p => p.id === profileId || p.customId === profileId);
     if (!profile) return;
     const identifier = profile.customId || profile.id;
-    const link = `${window.location.origin}/${token}/${identifier}`;
+    const link = `${window.location.origin}/sub/${token}/${identifier}`;
 
     // Clipboard API Fallback for non-secure contexts (http)
     if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -148,7 +148,7 @@ export function useProfiles(markDirty) {
     if (!profile) return;
     const identifier = profile.customId || profile.id;
     // 添加 Clash 专用参数
-    const link = `${window.location.origin}/${token}/${identifier}?target=clash&builtin=1`;
+    const link = `${window.location.origin}/sub/${token}/${identifier}?target=clash&builtin=1`;
 
     // Clipboard API Fallback for non-secure contexts (http)
     if (navigator.clipboard && navigator.clipboard.writeText) {

@@ -3,7 +3,7 @@ import { createJsonResponse } from '../utils.js';
 import { parseNodeInfo } from '../utils/geo-utils.js';
 import { calculateProtocolStats, calculateRegionStats } from '../utils/node-parser.js';
 import { applyNodeTransformPipeline } from '../../utils/node-transformer.js';
-import { KV_KEY_SUBS, KV_KEY_PROFILES } from '../config.js';
+import { KV_KEY_SUBS, KV_KEY_PROFILES, KV_KEY_IPSUB_GROUPS } from '../config.js';
 import { fetchSubscriptionNodes } from './node-fetcher.js';
 import { applyManualNodeName } from '../utils/node-cleaner.js';
 
@@ -22,6 +22,7 @@ export async function handleProfileMode(request, env, profileId, userAgent, appl
     // 获取订阅组和所有数据
     const allProfiles = await storageAdapter.get(KV_KEY_PROFILES) || [];
     const allSubscriptions = await storageAdapter.get(KV_KEY_SUBS) || [];
+    const allIpSubGroups = await storageAdapter.get(KV_KEY_IPSUB_GROUPS) || [];
 
     // 查找匹配的订阅组
     const profile = allProfiles.find(p => (p.customId && p.customId === profileId) || p.id === profileId);
@@ -32,6 +33,7 @@ export async function handleProfileMode(request, env, profileId, userAgent, appl
 
     // Create a map for quick lookup
     const misubMap = new Map(allSubscriptions.map(item => [item.id, item]));
+    const ipSubGroupMap = new Map(allIpSubGroups.map(item => [item.id, item]));
 
     const targetMisubs = [];
 
@@ -46,7 +48,24 @@ export async function handleProfileMode(request, env, profileId, userAgent, appl
         });
     }
 
-    // 2. Add manual nodes in order defined by profile
+    // 2. Add ipSub groups in order defined by profile
+    const profileIpSubGroupIds = profile.ipSubGroups || [];
+    if (Array.isArray(profileIpSubGroupIds)) {
+        profileIpSubGroupIds.forEach(id => {
+            const group = ipSubGroupMap.get(id);
+            const rawUrl = typeof group?.urls?.raw === 'string' ? group.urls.raw.trim() : '';
+            if (group && rawUrl) {
+                targetMisubs.push({
+                    id: `ipsub_${id}`,
+                    name: group.name || '优选IP订阅组',
+                    url: rawUrl,
+                    enabled: true,
+                });
+            }
+        });
+    }
+
+    // 3. Add manual nodes in order defined by profile
     const profileNodeIds = profile.manualNodes || [];
     if (Array.isArray(profileNodeIds)) {
         profileNodeIds.forEach(id => {

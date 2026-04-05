@@ -17,7 +17,7 @@ import { collectManualNodeGroups } from '../composables/manual-nodes/groups.js';
 
 const dataStore = useDataStore();
 const { showToast } = useToastStore();
-const { subscriptions, ipSubGroups } = storeToRefs(dataStore);
+const { subscriptions, ipSubGroups, saveState } = storeToRefs(dataStore);
 
 const QRCodeModal = defineAsyncComponent(() => import('../components/modals/QRCodeModal.vue'));
 const NodePreviewModal = defineAsyncComponent(() => import('../components/modals/NodePreview/NodePreviewModal.vue'));
@@ -92,6 +92,13 @@ watch(() => ipSubGroups.value.length, (length) => {
 
   if (currentPage.value > totalPages.value) {
     currentPage.value = totalPages.value;
+  }
+});
+
+watch(saveState, (state) => {
+  if (state === 'success' && isSorting.value) {
+    isSorting.value = false;
+    reorderSnapshot.value = [];
   }
 });
 
@@ -269,6 +276,7 @@ function toggleSelectAll() {
 
 function requestDeleteGroup(group) {
   commitGroupsMutation(() => {
+    dataStore.removeIpSubGroupFromProfiles(group.id);
     dataStore.removeIpSubGroup(group.id);
   });
   showToast(`已删除优选 IP 订阅组：${group.name}，记得保存更改`, 'success');
@@ -279,6 +287,7 @@ function confirmBatchDelete() {
 
   const idsToRemove = new Set(selectedIds.value);
   commitGroupsMutation(() => {
+    dataStore.removeIpSubGroupFromProfiles(Array.from(idsToRemove));
     dataStore.overwriteIpSubGroups(ipSubGroups.value.filter((group) => !idsToRemove.has(group.id)));
   });
   showToast(`已批量删除 ${idsToRemove.size} 个优选 IP 订阅组，记得保存更改`, 'success');
@@ -294,9 +303,6 @@ function handleToggleSort() {
   }
 
   isSorting.value = !isSorting.value;
-  if (isSorting.value) {
-    showToast('已进入手动排序模式，拖拽完成后会标记为未保存', 'info');
-  }
 }
 
 function handleSortStart() {

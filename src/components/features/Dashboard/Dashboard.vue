@@ -41,7 +41,7 @@ const props = defineProps({ data: Object });
 const { showToast } = useToastStore();
 const uiStore = useUIStore();
 const dataStore = useDataStore();
-const { settings, isDirty, isLoading } = storeToRefs(dataStore); // Use store refs
+const { settings, isDirty, isLoading, ipSubGroups } = storeToRefs(dataStore); // Use store refs
 const config = settings; // Compatibility alias for template
 const { clearDirty } = dataStore; // Don't destructure markDirty directly
 if (isDev) {
@@ -428,7 +428,8 @@ import SavePrompt from '../../ui/SavePrompt.vue';
     </template></Modal>
 
   <ProfileModal v-if="showProfileModal" v-model:show="showProfileModal" :profile="editingProfile" :is-new="isNewProfile"
-    :all-subscriptions="subscriptions" :all-manual-nodes="manualNodes" @save="handleSaveProfile" size="6xl" />
+    :all-subscriptions="subscriptions" :all-manual-nodes="manualNodes" :all-ip-sub-groups="ipSubGroups"
+    @save="handleSaveProfile" size="6xl" />
 
   <ManualNodeEditModal v-model:show="showNodeModal" :is-new="isNewNode" :editing-node="editingNode"
     @confirm="handleSaveNode" @input-url="handleNodeUrlInput" />

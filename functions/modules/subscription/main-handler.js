@@ -2,7 +2,7 @@ import { StorageFactory } from '../../storage-adapter.js';
 import { migrateConfigSettings, formatBytes, getCallbackToken, getPublicBaseUrl, migrateProfileIds } from '../utils.js';
 import { generateCombinedNodeList } from '../../services/subscription-service.js';
 import { sendEnhancedTgNotification } from '../notifications.js';
-import { KV_KEY_SUBS, KV_KEY_PROFILES, KV_KEY_SETTINGS, DEFAULT_SETTINGS as defaultSettings } from '../config.js';
+import { KV_KEY_SUBS, KV_KEY_PROFILES, KV_KEY_IPSUB_GROUPS, KV_KEY_SETTINGS, DEFAULT_SETTINGS as defaultSettings } from '../config.js';
 import { createDisguiseResponse } from '../disguise-page.js';
 import { generateCacheKey, setCache } from '../../services/node-cache-service.js';
 import { resolveRequestContext } from './request-context.js';
@@ -32,14 +32,16 @@ export async function handleMisubRequest(context) {
     }
 
     const storageAdapter = StorageFactory.createAdapter(env, await StorageFactory.getStorageType(env));
-    const [settingsData, misubsData, profilesData] = await Promise.all([
+    const [settingsData, misubsData, profilesData, ipSubGroupsData] = await Promise.all([
         storageAdapter.get(KV_KEY_SETTINGS),
         storageAdapter.get(KV_KEY_SUBS),
-        storageAdapter.get(KV_KEY_PROFILES)
+        storageAdapter.get(KV_KEY_PROFILES),
+        storageAdapter.get(KV_KEY_IPSUB_GROUPS)
     ]);
     const settings = settingsData || {};
     const allMisubs = misubsData || [];
     const allProfiles = profilesData || [];
+    const allIpSubGroups = ipSubGroupsData || [];
 
     // 自动迁移旧版 profile ID（去除 'profile_' 前缀）
     if (migrateProfileIds(allProfiles)) {
@@ -109,6 +111,7 @@ export async function handleMisubRequest(context) {
                 targetMisubs = [];
                 // Create a map for quick lookup
                 const misubMap = new Map(allMisubs.map(item => [item.id, item]));
+                const ipSubGroupMap = new Map(allIpSubGroups.map(item => [item.id, item]));
 
                 // 1. Add subscriptions in order defined by profile
                 const profileSubIds = profile.subscriptions || [];
@@ -121,7 +124,24 @@ export async function handleMisubRequest(context) {
                     });
                 }
 
-                // 2. Add manual nodes in order defined by profile
+                // 2. Add ipSub groups in order defined by profile
+                const profileIpSubGroupIds = profile.ipSubGroups || [];
+                if (Array.isArray(profileIpSubGroupIds)) {
+                    profileIpSubGroupIds.forEach(id => {
+                        const group = ipSubGroupMap.get(id);
+                        const rawUrl = typeof group?.urls?.raw === 'string' ? group.urls.raw.trim() : '';
+                        if (group && rawUrl) {
+                            targetMisubs.push({
+                                id: `ipsub_${id}`,
+                                name: group.name || '优选IP订阅组',
+                                url: rawUrl,
+                                enabled: true,
+                            });
+                        }
+                    });
+                }
+
+                // 3. Add manual nodes in order defined by profile
                 const profileNodeIds = profile.manualNodes || [];
                 if (Array.isArray(profileNodeIds)) {
                     profileNodeIds.forEach(id => {

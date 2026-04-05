@@ -12,6 +12,16 @@ const emit = defineEmits(['delete', 'change', 'edit', 'open-copy', 'preview', 'm
 
 import Switch from '../ui/Switch.vue';
 
+const subscriptionCount = computed(() => {
+  const commonSubscriptions = Array.isArray(props.profile?.subscriptions) ? props.profile.subscriptions.length : 0;
+  const ipSubGroups = Array.isArray(props.profile?.ipSubGroups) ? props.profile.ipSubGroups.length : 0;
+  return commonSubscriptions + ipSubGroups;
+});
+
+const manualNodeCount = computed(() => {
+  return Array.isArray(props.profile?.manualNodes) ? props.profile.manualNodes.length : 0;
+});
+
 </script>
 
 <template>
@@ -46,7 +56,7 @@ import Switch from '../ui/Switch.vue';
     
     <!-- 单独一行显示包含信息 -->
     <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
-      包含 {{ profile.subscriptions.length }} 个订阅,{{ profile.manualNodes.length }} 个节点
+      包含 {{ subscriptionCount }} 个订阅,{{ manualNodeCount }} 个节点
     </p>
 
     <div class="flex flex-wrap justify-between items-center mt-3 gap-y-3">

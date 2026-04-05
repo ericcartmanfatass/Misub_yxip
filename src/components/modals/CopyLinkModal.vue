@@ -23,7 +23,7 @@ const identifier = computed(() => {
 
 const baseUrl = computed(() => {
   if (!props.token || props.token === 'auto' || !props.token.trim()) return '';
-  return `${window.location.origin}/${props.token}/${identifier.value}`;
+  return `${window.location.origin}/sub/${props.token}/${identifier.value}`;
 });
 
 const clients = computed(() => [

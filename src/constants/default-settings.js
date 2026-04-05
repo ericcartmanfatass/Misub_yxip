@@ -87,6 +87,7 @@ export const DEFAULT_PROFILE_FORM = {
     subConverter: '',
     subConfig: '',
     subscriptions: [],
+    ipSubGroups: [],
     manualNodes: [],
     enabled: true,
     prefixSettings: {

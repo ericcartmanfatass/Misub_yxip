@@ -332,19 +332,19 @@ function buildNodeName(baseName, prefix, suffix = '') {
     const cleanPrefix = String(prefix || '').trim();
     const cleanSuffix = String(suffix || '').trim();
 
-    const parts = [];
-
-    if (cleanPrefix && cleanBase !== cleanPrefix && !cleanBase.startsWith(`${cleanPrefix} |`)) {
-        parts.push(cleanPrefix);
+    if (cleanPrefix && cleanSuffix) {
+        return `${cleanPrefix}|${cleanSuffix}`;
     }
 
-    parts.push(cleanBase);
-
-    if (cleanSuffix && cleanSuffix !== cleanBase && !cleanBase.endsWith(`| ${cleanSuffix}`) && cleanSuffix !== cleanPrefix) {
-        parts.push(cleanSuffix);
+    if (cleanPrefix) {
+        return `${cleanPrefix}|${cleanBase}`;
     }
 
-    return parts.join(' | ');
+    if (cleanSuffix) {
+        return `${cleanBase}|${cleanSuffix}`;
+    }
+
+    return cleanBase;
 }
 
 function expandNodes(baseNodes, endpoints, options = {}) {
@@ -1270,3 +1270,9 @@ export async function handleIpSubFetch(url, env) {
         return new Response(error.message, { status: 400 });
     }
 }
+
+export const __test__ = {
+    buildNodeName,
+    expandNodes,
+    summarizeNodes,
+};

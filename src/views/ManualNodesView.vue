@@ -1,5 +1,6 @@
 <script setup>
-import { ref, defineAsyncComponent } from 'vue';
+import { ref, defineAsyncComponent, watch } from 'vue';
+import { storeToRefs } from 'pinia';
 import { useDataStore } from '../stores/useDataStore.js';
 import { useManualNodes } from '../composables/useManualNodes.js';
 import { useNodeForms } from '../composables/useNodeForms.js'; // Added
@@ -15,6 +16,7 @@ import BatchGroupModal from '../components/modals/BatchGroupModal.vue'; // Added
 const dataStore = useDataStore();
 const { showToast } = useToastStore();
 const { markDirty } = dataStore;
+const { saveState } = storeToRefs(dataStore);
 
 // Component Logic Reuse
 const isSortingNodes = ref(false);
@@ -71,6 +73,11 @@ const handleAutoSortNodes = () => {
   showToast('已按地区排序，请手动保存', 'success');
 };
 
+const handleManualNodeSortDirty = () => {
+  markDirty();
+  showToast('手动节点排序已更新，记得保存更改', 'success');
+};
+
 const handleDeduplicateNodes = () => {
   const plan = buildDedupPlan();
   if (!plan || plan.removeCount === 0) {
@@ -114,6 +121,12 @@ const confirmBatchDelete = () => {
   showBatchDeleteModal.value = false;
 };
 
+watch(saveState, (state) => {
+  if (state === 'success' && isSortingNodes.value) {
+    isSortingNodes.value = false;
+  }
+});
+
 </script>
 
 <template>
@@ -124,28 +137,22 @@ const confirmBatchDelete = () => {
       :current-page="manualNodesCurrentPage" :total-pages="manualNodesTotalPages" :is-sorting="isSortingNodes"
       :search-term="searchTerm" :view-mode="manualNodeViewMode" :groups="manualNodeGroups"
       :active-group-filter="activeGroupFilter" :items-per-page="manualNodesPerPage"
-      @update:items-per-page="val => manualNodesPerPage = val"
-      @add="handleAddNode" @delete="handleDeleteNodeWithCleanup"
-      @edit="(id) => handleEditNode(manualNodes.find(n => n.id === id))" @change-page="changeManualNodesPage"
-      @update:search-term="newVal => searchTerm.value = newVal" @update:view-mode="setViewMode"
-      @toggle-sort="isSortingNodes = !isSortingNodes" @mark-dirty="markDirty" @auto-sort="handleAutoSortNodes"
-      @deduplicate="handleDeduplicateNodes" @import="showSubscriptionImportModal = true"
-      @delete-all="showDeleteNodesModal = true" @reorder="reorderManualNodes" @rename-group="renameGroup"
-      @set-group-filter="setGroupFilter"
-      @batch-update-group="(ids, group) => batchUpdateGroup(ids, group)"
-      @batch-delete-nodes="handleBatchDeleteRequest"
-      @open-batch-group-modal="handleOpenBatchGroupModal"
-      :ping-results="pingResults"
-      :pinging-nodes="pingingNodes"
-      @ping="pingNodeId"
-      @ping-all="pingAllNodes"
-    />
+      @update:items-per-page="val => manualNodesPerPage = val" @add="handleAddNode"
+      @delete="handleDeleteNodeWithCleanup" @edit="(id) => handleEditNode(manualNodes.find(n => n.id === id))"
+      @change-page="changeManualNodesPage" @update:search-term="newVal => searchTerm.value = newVal"
+      @update:view-mode="setViewMode" @toggle-sort="isSortingNodes = !isSortingNodes"
+      @mark-dirty="handleManualNodeSortDirty" @auto-sort="handleAutoSortNodes" @deduplicate="handleDeduplicateNodes"
+      @import="showSubscriptionImportModal = true" @delete-all="showDeleteNodesModal = true"
+      @reorder="reorderManualNodes" @rename-group="renameGroup" @set-group-filter="setGroupFilter"
+      @batch-update-group="(ids, group) => batchUpdateGroup(ids, group)" @batch-delete-nodes="handleBatchDeleteRequest"
+      @open-batch-group-modal="handleOpenBatchGroupModal" :ping-results="pingResults" :pinging-nodes="pingingNodes"
+      @ping="pingNodeId" @ping-all="pingAllNodes" />
 
     <ManualNodeEditModal v-model:show="showNodeModal" :is-new="isNewNode" :editing-node="editingNode"
       @confirm="handleSaveNode" @input-url="handleNodeUrlInput" />
     <ManualNodeDedupModal v-model:show="showDedupModal" :plan="dedupPlan"
       @confirm="applyDedupPlan(dedupPlan); showDedupModal = false; dedupPlan = null" />
-    
+
     <BatchGroupModal v-model:show="showBatchGroupModal" :groups="manualNodeGroups" @confirm="handleBatchGroupConfirm" />
 
     <Modal v-model:show="showDeleteNodesModal" @confirm="handleDeleteAllNodesWithCleanup">

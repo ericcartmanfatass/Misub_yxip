@@ -71,7 +71,7 @@ const isProcessedToggleVisible = computed(() => {
 <template>
   <!-- 响应式网格布局 -->
   <!-- 移动端：Grid (1列用于搜索，2列用于筛选)，桌面端维持原样 -->
-  <div class="flex flex-col lg:grid lg:grid-cols-4 gap-3 sm:gap-4 lg:items-end">
+  <div class="flex flex-col lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] gap-3 sm:gap-4 lg:items-end">
     <!-- 搜索 (移动端置顶) -->
     <div class="w-full">
       <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 sm:mb-2">
@@ -115,40 +115,50 @@ const isProcessedToggleVisible = computed(() => {
     <!-- 筛选器组 (移动端并排) -->
     <div class="grid grid-cols-2 gap-3 lg:contents">
       <!-- 协议筛选 -->
-      <div>
+      <div class="relative">
         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 sm:mb-2">
           协议类型
         </label>
         <select
           v-model="protocolModel"
-          class="w-full px-2 sm:px-3 py-1.5 sm:py-2 text-sm border border-gray-300 dark:border-gray-600 misub-radius-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+          class="w-full appearance-none px-2 sm:px-3 py-1.5 sm:py-2 pr-8 sm:pr-10 text-sm border border-gray-300 dark:border-gray-600 misub-radius-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
         >
           <option value="all">全部</option>
           <option v-for="protocol in availableProtocols" :key="protocol" :value="protocol">
             {{ protocol.toUpperCase() }}
           </option>
         </select>
+        <div class="pointer-events-none absolute inset-y-0 right-0 top-7 sm:top-8 flex items-center pr-2 sm:pr-3 text-gray-400 dark:text-gray-500">
+          <svg class="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+          </svg>
+        </div>
       </div>
 
       <!-- 地区筛选 -->
-      <div>
+      <div class="relative">
         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 sm:mb-2">
           地区筛选
         </label>
         <select
           v-model="regionModel"
-          class="w-full px-2 sm:px-3 py-1.5 sm:py-2 text-sm border border-gray-300 dark:border-gray-600 misub-radius-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+          class="w-full appearance-none px-2 sm:px-3 py-1.5 sm:py-2 pr-8 sm:pr-10 text-sm border border-gray-300 dark:border-gray-600 misub-radius-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
         >
           <option value="all">全部</option>
           <option v-for="region in availableRegions" :key="region" :value="region">
             {{ region }}
           </option>
         </select>
+        <div class="pointer-events-none absolute inset-y-0 right-0 top-7 sm:top-8 flex items-center pr-2 sm:pr-3 text-gray-400 dark:text-gray-500">
+          <svg class="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+          </svg>
+        </div>
       </div>
     </div>
 
     <!-- 视图切换 & 规则处理 (Desktop Combined) -->
-    <div class="hidden lg:flex gap-6">
+    <div class="hidden lg:flex gap-6 justify-self-end justify-end">
       <!-- 视图切换 -->
       <div>
         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 sm:mb-2">

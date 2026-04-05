@@ -18,7 +18,7 @@ const {
 } = useProfiles(markDirty);
 
 // For ProfileModal need access to all subscriptions and nodes
-const { subscriptions } = storeToRefs(dataStore);
+const { subscriptions, ipSubGroups } = storeToRefs(dataStore);
 const { manualNodes } = useManualNodes(markDirty);
 
 const handleProfileReorder = (fromIndex, toIndex) => {
@@ -105,7 +105,7 @@ const handleQRCode = (profileId) => {
     <LogModal :show="showLogModal" @update:show="showLogModal = $event" :filter-profile-name="logProfileName" />
 
     <ProfileModal v-if="showProfileModal" v-model:show="showProfileModal" :profile="editingProfile"
-      :is-new="isNewProfile" :all-subscriptions="subscriptions" :all-manual-nodes="manualNodes"
+      :is-new="isNewProfile" :all-subscriptions="subscriptions" :all-manual-nodes="manualNodes" :all-ip-sub-groups="ipSubGroups"
       @save="handleSaveProfile" size="6xl" />
 
     <Modal v-model:show="showDeleteProfilesModal" @confirm="handleDeleteAllProfiles">

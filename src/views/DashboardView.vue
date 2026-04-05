@@ -15,7 +15,7 @@ import { useToastStore } from '../stores/toast.js';
 import StatCards from '../components/features/Dashboard/StatCards.vue';
 
 const dataStore = useDataStore();
-const { settings, profiles, isLoading, lastUpdated } = storeToRefs(dataStore);
+const { settings, profiles, isLoading, lastUpdated, ipSubGroups } = storeToRefs(dataStore);
 const { activeSubscriptions, activeProfiles, markDirty } = dataStore; 
 
 const { showToast } = useToastStore();
@@ -197,6 +197,7 @@ const handleQRCode = (url, title) => {
         :is-new="isNewProfile" 
         :all-subscriptions="subscriptions" 
         :all-manual-nodes="manualNodes" 
+        :all-ip-sub-groups="ipSubGroups" 
         @save="handleSaveProfile" 
         size="2xl" 
       />
@@ -214,4 +215,3 @@ const handleQRCode = (url, title) => {
     </template>
   </div>
 </template>
-

@@ -262,6 +262,26 @@ export const useDataStore = defineStore('data', () => {
         }
     }
 
+    function removeIpSubGroupFromProfiles(groupIds) {
+        const idsToRemove = Array.isArray(groupIds) ? new Set(groupIds) : new Set([groupIds]);
+        if (idsToRemove.size === 0) return;
+
+        let modified = false;
+        profiles.value.forEach(profile => {
+            if (Array.isArray(profile.ipSubGroups) && profile.ipSubGroups.length > 0) {
+                const originalLength = profile.ipSubGroups.length;
+                profile.ipSubGroups = profile.ipSubGroups.filter(id => !idsToRemove.has(id));
+                if (profile.ipSubGroups.length !== originalLength) {
+                    modified = true;
+                }
+            }
+        });
+
+        if (modified && isDev) {
+            console.debug('[DataStore] Cleaned up ipSubGroup references from profiles');
+        }
+    }
+
     function removeManualNodeFromProfiles(nodeIds) {
         const idsToRemove = Array.isArray(nodeIds) ? new Set(nodeIds) : new Set([nodeIds]);
         if (idsToRemove.size === 0) return;
@@ -349,6 +369,7 @@ export const useDataStore = defineStore('data', () => {
         removeProfile,
         updateIpSubGroup,
         removeIpSubGroup,
+        removeIpSubGroupFromProfiles,
         removeManualNodeFromProfiles,
         removeSubscriptionFromProfiles,
         markDirty,

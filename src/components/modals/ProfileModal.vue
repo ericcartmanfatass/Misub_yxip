@@ -3,6 +3,7 @@ import { ref, watch, computed } from 'vue';
 import Modal from '../forms/Modal.vue';
 import ProfileForm from './ProfileModal/ProfileForm.vue';
 import SubscriptionSelector from './ProfileModal/SubscriptionSelector.vue';
+import IpSubGroupSelector from './ProfileModal/IpSubGroupSelector.vue';
 import NodeSelector from './ProfileModal/NodeSelector.vue';
 import { useManualNodes } from '../../composables/useManualNodes.js';
 import { useDataStore } from '../../stores/useDataStore.js';
@@ -16,12 +17,17 @@ const props = defineProps({
   isNew: Boolean,
   allSubscriptions: Array,
   allManualNodes: Array,
+  allIpSubGroups: {
+    type: Array,
+    default: () => []
+  },
 });
 
 const emit = defineEmits(['update:show', 'save']);
 
 const localProfile = ref({});
 const subscriptionSearchTerm = ref('');
+const ipSubGroupSearchTerm = ref('');
 const nodeSearchTerm = ref('');
 const activeManualNodeGroupFilter = ref(null);
 const showAdvanced = ref(false);
@@ -197,6 +203,33 @@ const filteredManualNodes = computed(() => {
   });
 });
 
+const filteredIpSubGroups = computed(() => {
+  const validGroups = (props.allIpSubGroups || []).filter(group => String(group?.urls?.raw || '').trim());
+
+  if (!ipSubGroupSearchTerm.value) {
+    return validGroups;
+  }
+
+  const lowerCaseSearchTerm = ipSubGroupSearchTerm.value.toLowerCase();
+  const alternativeTerms = countryCodeMap[lowerCaseSearchTerm] || [];
+
+  return validGroups.filter(group => {
+    const groupNameLower = group.name ? group.name.toLowerCase() : '';
+
+    if (groupNameLower.includes(lowerCaseSearchTerm)) {
+      return true;
+    }
+
+    for (const altTerm of alternativeTerms) {
+      if (groupNameLower.includes(altTerm.toLowerCase())) {
+        return true;
+      }
+    }
+
+    return false;
+  });
+});
+
 watch(() => props.profile, (newProfile) => {
   if (newProfile) {
     const profileCopy = JSON.parse(JSON.stringify(newProfile));
@@ -212,6 +245,7 @@ watch(() => props.profile, (newProfile) => {
     if (!profileCopy.prefixSettings || typeof profileCopy.prefixSettings !== 'object') {
       profileCopy.prefixSettings = {};
     }
+    profileCopy.ipSubGroups = Array.isArray(profileCopy.ipSubGroups) ? [...profileCopy.ipSubGroups] : [];
 profileCopy.prefixSettings.enableManualNodes =
 profileCopy.prefixSettings.enableManualNodes ?? null;
 profileCopy.prefixSettings.enableSubscriptions =
@@ -227,11 +261,12 @@ profileCopy.prefixSettings.prependGroupName ?? null;
     localProfile.value = profileCopy;
   } else {
 localProfile.value = {
-name: '',
-enabled: true,
-subscriptions: [],
-manualNodes: [],
-customId: '',
+ name: '',
+ enabled: true,
+ subscriptions: [],
+ ipSubGroups: [],
+ manualNodes: [],
+ customId: '',
 expiresAt: '',
 isPublic: true, // [新增] 默认为 true
 description: '', // [新增]
@@ -316,7 +351,7 @@ const updateSelectedIds = (listName, newIds) => {
 :create-default-node-transform="createDefaultNodeTransform"
 @toggle-advanced="showAdvanced = !showAdvanced" />
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
 
           <SubscriptionSelector :subscriptions="allSubscriptions" :filtered-subscriptions="filteredSubscriptions"
             :search-term="subscriptionSearchTerm" :selected-ids="localProfile.subscriptions || []"
@@ -325,6 +360,14 @@ const updateSelectedIds = (listName, newIds) => {
             @toggle-selection="toggleSelection('subscriptions', $event)"
             @select-all="handleSelectAll('subscriptions', filteredSubscriptions)"
             @deselect-all="handleDeselectAll('subscriptions', filteredSubscriptions)" />
+
+          <IpSubGroupSelector :groups="allIpSubGroups" :filtered-groups="filteredIpSubGroups"
+            :search-term="ipSubGroupSearchTerm" :selected-ids="localProfile.ipSubGroups || []"
+            @update:search-term="ipSubGroupSearchTerm = $event"
+            @update:selected-ids="updateSelectedIds('ipSubGroups', $event)"
+            @toggle-selection="toggleSelection('ipSubGroups', $event)"
+            @select-all="handleSelectAll('ipSubGroups', filteredIpSubGroups)"
+            @deselect-all="handleDeselectAll('ipSubGroups', filteredIpSubGroups)" />
 
           <NodeSelector :nodes="allManualNodes" :filtered-nodes="filteredManualNodes" :search-term="nodeSearchTerm"
             :active-group-filter="activeManualNodeGroupFilter" :groups="manualNodeGroups"

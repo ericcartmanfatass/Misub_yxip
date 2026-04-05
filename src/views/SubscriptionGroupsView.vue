@@ -1,5 +1,6 @@
 <script setup>
-import { ref, defineAsyncComponent, computed } from 'vue';
+import { ref, defineAsyncComponent, computed, watch } from 'vue';
+import { storeToRefs } from 'pinia';
 import { extractNodeName } from '../lib/utils.js';
 import { useDataStore } from '../stores/useDataStore.js';
 import { useSubscriptions } from '../composables/useSubscriptions.js';
@@ -15,6 +16,7 @@ import { useToastStore } from '../stores/toast.js';
 const dataStore = useDataStore();
 const { showToast } = useToastStore();
 const { markDirty } = dataStore;
+const { saveState } = storeToRefs(dataStore);
 
 // State
 // State
@@ -48,18 +50,23 @@ const {
 } = useBulkImportLogic({ addSubscriptionsFromBulk, addNodesFromBulk });
 
 const openBulkImportModal = () => {
-    showBulkImportModal.value = true;
+  showBulkImportModal.value = true;
 };
 
 const handleDeleteSubscriptionWithCleanup = (subId) => {
-    deleteSubscription(subId);
-    cleanupSubscriptions(subId);
+  deleteSubscription(subId);
+  cleanupSubscriptions(subId);
 };
 
 const handleDeleteAllSubscriptionsWithCleanup = () => {
-    deleteAllSubscriptions();
-    cleanupAllSubscriptions();
-    showDeleteSubsModal.value = false;
+  deleteAllSubscriptions();
+  cleanupAllSubscriptions();
+  showDeleteSubsModal.value = false;
+};
+
+const handleSubscriptionSortDirty = () => {
+  markDirty();
+  showToast('订阅排序已更新，记得保存更改', 'success');
 };
 
 // Preview
@@ -96,69 +103,49 @@ const handleQRCode = (id) => {
     showQRCodeModal.value = true;
   }
 };
+
+watch(saveState, (state) => {
+  if (state === 'success' && isSortingSubs.value) {
+    isSortingSubs.value = false;
+  }
+});
 </script>
 
 <template>
   <div class="max-w-(--breakpoint-xl) mx-auto">
 
 
-    <SubscriptionPanel
-      :subscriptions="subscriptions"
-      :paginated-subscriptions="paginatedSubscriptions"
-      :current-page="subsCurrentPage"
-      :total-pages="subsTotalPages"
-      :is-sorting="isSortingSubs"
-      @add="handleAddSubscription"
-      @delete="handleDeleteSubscriptionWithCleanup"
-      @change-page="changeSubsPage"
-      @update-node-count="handleUpdateNodeCount"
-      @refresh-all="batchUpdateAllSubscriptions"
+    <SubscriptionPanel :subscriptions="subscriptions" :paginated-subscriptions="paginatedSubscriptions"
+      :current-page="subsCurrentPage" :total-pages="subsTotalPages" :is-sorting="isSortingSubs"
+      @add="handleAddSubscription" @delete="handleDeleteSubscriptionWithCleanup" @change-page="changeSubsPage"
+      @update-node-count="handleUpdateNodeCount" @refresh-all="batchUpdateAllSubscriptions"
       @edit="(id) => handleEditSubscription(subscriptions.find(s => s.id === id))"
-      @toggle-sort="isSortingSubs = !isSortingSubs"
-      @mark-dirty="markDirty"
-      @delete-all="showDeleteSubsModal = true"
-      @preview="handlePreviewSubscription"
-      @reorder="reorderSubscriptions"
-      @import="openBulkImportModal"
-      @qrcode="handleQRCode"
-    >
-        <!-- Slot removed as user requested button move to dropdown -->
+      @toggle-sort="isSortingSubs = !isSortingSubs" @mark-dirty="handleSubscriptionSortDirty"
+      @delete-all="showDeleteSubsModal = true" @preview="handlePreviewSubscription" @reorder="reorderSubscriptions"
+      @import="openBulkImportModal" @qrcode="handleQRCode">
+      <!-- Slot removed as user requested button move to dropdown -->
     </SubscriptionPanel>
 
     <!-- Dialogs -->
-    <SubscriptionEditModal
-        v-model:show="showSubModal"
-        :is-new="isNewSubscription"
-        :editing-subscription="editingSubscription"
-        @confirm="handleSaveSubscription"
-    />
+    <SubscriptionEditModal v-model:show="showSubModal" :is-new="isNewSubscription"
+      :editing-subscription="editingSubscription" @confirm="handleSaveSubscription" />
 
     <Modal v-model:show="showDeleteSubsModal" @confirm="handleDeleteAllSubscriptionsWithCleanup">
-        <template #title><h3 class="text-lg font-bold text-red-500">确认清空订阅</h3></template>
-        <template #body><p class="text-sm text-gray-400">您确定要删除所有**订阅**吗？</p></template>
+      <template #title>
+        <h3 class="text-lg font-bold text-red-500">确认清空订阅</h3>
+      </template>
+      <template #body>
+        <p class="text-sm text-gray-400">您确定要删除所有**订阅**吗？</p>
+      </template>
     </Modal>
-    
-    <BulkImportModal 
-        v-if="showBulkImportModal" 
-        :show="showBulkImportModal" 
-        @update:show="showBulkImportModal = $event"
-        @import="(txt, tag) => handleBulkImport(txt, tag)"
-    />
 
-    <NodePreviewModal
-        :show="showNodePreviewModal"
-        :subscription-id="previewSubscriptionId"
-        :subscription-name="previewSubscriptionName"
-        :subscription-url="previewSubscriptionUrl"
-        :profile-id="null"
-        :profile-name="''"
-        @update:show="showNodePreviewModal = $event"
-    />
+    <BulkImportModal v-if="showBulkImportModal" :show="showBulkImportModal" @update:show="showBulkImportModal = $event"
+      @import="(txt, tag) => handleBulkImport(txt, tag)" />
 
-    <QRCodeModal 
-        v-model:show="showQRCodeModal" 
-        :url="qrCodeUrl" 
-        :title="qrCodeTitle" 
-    />
+    <NodePreviewModal :show="showNodePreviewModal" :subscription-id="previewSubscriptionId"
+      :subscription-name="previewSubscriptionName" :subscription-url="previewSubscriptionUrl" :profile-id="null"
+      :profile-name="''" @update:show="showNodePreviewModal = $event" />
+
+    <QRCodeModal v-model:show="showQRCodeModal" :url="qrCodeUrl" :title="qrCodeTitle" />
   </div>
 </template>
