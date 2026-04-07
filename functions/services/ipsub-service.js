@@ -331,17 +331,18 @@ function buildNodeName(baseName, prefix, suffix = '') {
     const cleanBase = String(baseName || '').trim() || 'node';
     const cleanPrefix = String(prefix || '').trim();
     const cleanSuffix = String(suffix || '').trim();
+    const separator = ' | ';
 
     if (cleanPrefix && cleanSuffix) {
-        return `${cleanPrefix}|${cleanSuffix}`;
+        return `${cleanPrefix}${separator}${cleanSuffix}`;
     }
 
     if (cleanPrefix) {
-        return `${cleanPrefix}|${cleanBase}`;
+        return `${cleanPrefix}${separator}${cleanBase}`;
     }
 
     if (cleanSuffix) {
-        return `${cleanBase}|${cleanSuffix}`;
+        return `${cleanBase}${separator}${cleanSuffix}`;
     }
 
     return cleanBase;

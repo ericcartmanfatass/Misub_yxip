@@ -15,6 +15,40 @@ import { generateBuiltinClashConfig } from './builtin-clash-generator.js'; // [A
 import { generateBuiltinSurgeConfig } from './builtin-surge-generator.js'; // [Added] 内置 Surge 生成器
 import { generateBuiltinLoonConfig } from './builtin-loon-generator.js'; // [Added] 内置 Loon 生成器
 
+function buildRequestScopedPath(routePrefix = '', token = '', profileIdentifier = null) {
+    const normalizedPrefix = String(routePrefix || '').trim().replace(/\/+$/, '');
+    const safeToken = String(token || '').trim();
+    const safeProfileIdentifier = String(profileIdentifier || '').trim();
+
+    if (!safeToken) {
+        return normalizedPrefix || '/';
+    }
+
+    if (safeProfileIdentifier) {
+        return normalizedPrefix
+            ? `${normalizedPrefix}/${safeToken}/${safeProfileIdentifier}`
+            : `/${safeToken}/${safeProfileIdentifier}`;
+    }
+
+    return normalizedPrefix ? `${normalizedPrefix}/${safeToken}` : `/${safeToken}`;
+}
+
+function applyManagedProfilePrefixOverride(prefixSettings = {}, shouldStripPrefixes = false) {
+    if (!shouldStripPrefixes) return { ...prefixSettings };
+
+    return {
+        ...prefixSettings,
+        enableManualNodes: false,
+        enableSubscriptions: false,
+        prependGroupName: false,
+    };
+}
+
+export const __test__ = {
+    buildRequestScopedPath,
+    applyManagedProfilePrefixOverride,
+};
+
 /**
  * 处理MiSub订阅请求
  * @param {Object} context - Cloudflare上下文
@@ -70,7 +104,8 @@ export async function handleMisubRequest(context) {
         return createDisguiseResponse(config.disguise, request.url);
     }
 
-    const { token, profileIdentifier } = resolveRequestContext(url, config, allProfiles);
+    const { token, profileIdentifier, routePrefix: requestRoutePrefix } = resolveRequestContext(url, config, allProfiles);
+    const isManagedProfileRoute = Boolean(profileIdentifier && requestRoutePrefix);
 
     // [Debug Logging Parse]
     if (!env.workers) {
@@ -258,7 +293,9 @@ export async function handleMisubRequest(context) {
     // === 缓存机制：快速响应客户端请求 ===
     const cacheKey = generateCacheKey(
         profileIdentifier ? 'profile' : 'token',
-        profileIdentifier || token
+        profileIdentifier
+            ? `${isManagedProfileRoute ? 'managed' : 'public'}_${profileIdentifier}`
+            : token
     );
 
     // 检查是否强制刷新（通过 URL 参数）
@@ -294,7 +331,7 @@ export async function handleMisubRequest(context) {
         // prefixSettings 回退逻辑
         const globalPrefixSettings = config.defaultPrefixSettings || {};
         const profilePrefixSettings = currentProfile?.prefixSettings || null;
-        const effectivePrefixSettings = { ...globalPrefixSettings };
+        let effectivePrefixSettings = { ...globalPrefixSettings };
 
         if (profilePrefixSettings && typeof profilePrefixSettings === 'object') {
             if (profilePrefixSettings.enableManualNodes !== null && profilePrefixSettings.enableManualNodes !== undefined) {
@@ -307,6 +344,8 @@ export async function handleMisubRequest(context) {
                 effectivePrefixSettings.manualNodePrefix = profilePrefixSettings.manualNodePrefix;
             }
         }
+
+        effectivePrefixSettings = applyManagedProfilePrefixOverride(effectivePrefixSettings, isManagedProfileRoute);
 
         // nodeTransform 回退逻辑
         const globalNodeTransform = config.defaultNodeTransform || {};
@@ -407,7 +446,7 @@ export async function handleMisubRequest(context) {
     const base64Content = btoa(unescape(encodeURIComponent(combinedNodeList)));
 
     const callbackToken = await getCallbackToken(env);
-    const callbackPath = profileIdentifier ? `/${token}/${profileIdentifier}` : `/${token}`;
+    const callbackPath = buildRequestScopedPath(requestRoutePrefix, token, profileIdentifier);
     const publicBaseUrl = getPublicBaseUrl(env, url);
     const callbackUrl = `${publicBaseUrl.origin}${callbackPath}?target=base64&callback_token=${callbackToken}`;
 
@@ -499,7 +538,7 @@ export async function handleMisubRequest(context) {
 
     const buildBuiltinSurgeResponse = () => {
         const publicBaseUrl = getPublicBaseUrl(env, url);
-        const callbackPath = profileIdentifier ? `/${token}/${profileIdentifier}` : `/${token}`;
+        const callbackPath = buildRequestScopedPath(requestRoutePrefix, token, profileIdentifier);
         const managedUrl = `${publicBaseUrl.origin}${callbackPath}?surge`;
 
         const surgeConfig = generateBuiltinSurgeConfig(combinedNodeList, {
@@ -567,7 +606,7 @@ export async function handleMisubRequest(context) {
 
     const buildBuiltinLoonResponse = () => {
         const publicBaseUrl = getPublicBaseUrl(env, url);
-        const callbackPath = profileIdentifier ? `/${token}/${profileIdentifier}` : `/${token}`;
+        const callbackPath = buildRequestScopedPath(requestRoutePrefix, token, profileIdentifier);
         const managedUrl = `${publicBaseUrl.origin}${callbackPath}?loon`;
 
         const loonConfig = generateBuiltinLoonConfig(combinedNodeList, {

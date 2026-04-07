@@ -9,16 +9,20 @@ describe('IpSub naming rules', () => {
         expect(buildNodeName('原节点名称', '', '')).toBe('原节点名称');
     });
 
-    it('仅有前缀时使用“前缀|原节点名称”', () => {
-        expect(buildNodeName('原节点名称', 'CF-HK', '')).toBe('CF-HK|原节点名称');
+    it('仅有前缀时使用“前缀 | 原节点名称”', () => {
+        expect(buildNodeName('原节点名称', 'CF-HK', '')).toBe('CF-HK | 原节点名称');
     });
 
-    it('仅有后缀时使用“原节点名称|后缀”', () => {
-        expect(buildNodeName('原节点名称', '', 'HK-01')).toBe('原节点名称|HK-01');
+    it('仅有后缀时使用“原节点名称 | 后缀”', () => {
+        expect(buildNodeName('原节点名称', '', 'HK-01')).toBe('原节点名称 | HK-01');
     });
 
-    it('当前后缀同时存在时使用“前缀|后缀”且不保留原节点名称', () => {
-        expect(buildNodeName('原节点名称', 'CF-HK', 'HK-01')).toBe('CF-HK|HK-01');
+    it('当前后缀同时存在时使用“前缀 | 后缀”且不保留原节点名称', () => {
+        expect(buildNodeName('原节点名称', 'CF-HK', 'HK-01')).toBe('CF-HK | HK-01');
+    });
+
+    it('英文和数字前后缀也应始终在分隔符两侧保留空格', () => {
+        expect(buildNodeName('US01', 'CF', '104.16.1.2')).toBe('CF | 104.16.1.2');
     });
 
     it('扩展节点与预览结果应复用新的命名规则', () => {
@@ -47,10 +51,10 @@ describe('IpSub naming rules', () => {
 
         expect(warnings).toEqual([]);
         expect(nodes).toHaveLength(1);
-        expect(nodes[0].name).toBe('CF-HK|HK-01');
+        expect(nodes[0].name).toBe('CF-HK | HK-01');
 
         const preview = summarizeNodes(nodes, 20);
         expect(preview).toHaveLength(1);
-        expect(preview[0].name).toBe('CF-HK|HK-01');
+        expect(preview[0].name).toBe('CF-HK | HK-01');
     });
 });

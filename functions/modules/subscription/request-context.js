@@ -13,16 +13,18 @@
  * @param {URL} url - 请求 URL
  * @param {Object} config - 全局配置
  * @param {Array} allProfiles - 订阅组列表
- * @returns {{token: string, profileIdentifier: (string|null)}}
+ * @returns {{token: string, profileIdentifier: (string|null), routePrefix: string}}
  */
 export function resolveRequestContext(url, config, allProfiles) {
     let token = '';
     let profileIdentifier = null;
+    let routePrefix = '';
     const pathSegments = url.pathname.split('/').filter(Boolean);
 
-    if (pathSegments.length >= 3) {
+    if (pathSegments.length >= 3 && (pathSegments[0] === 'sub' || pathSegments[0] === 's')) {
         // 3+ 段：/sub/{token}/{profileId}
         // 第一段为路由前缀 'sub'，跳过
+        routePrefix = `/${pathSegments[0].toLowerCase()}`;
         token = pathSegments[1];
         profileIdentifier = pathSegments[2];
     } else if (pathSegments.length === 2) {
@@ -35,6 +37,7 @@ export function resolveRequestContext(url, config, allProfiles) {
         } else if (firstSeg === 'sub' || firstSeg === 's') {
             // 第一段为常见订阅路由前缀，第二段为实际 token
             // 例如：/sub/{mytoken}
+            routePrefix = `/${firstSeg.toLowerCase()}`;
             token = secondSeg;
         } else {
             // 兜底：假设为 /{token}/{profileId} 格式，由后续逻辑校验 token 合法性
@@ -48,5 +51,5 @@ export function resolveRequestContext(url, config, allProfiles) {
         token = url.searchParams.get('token');
     }
 
-    return { token, profileIdentifier };
+    return { token, profileIdentifier, routePrefix };
 }
